@@ -77,5 +77,53 @@ Exactly the arrays with described dimensions from above. So, for example, data v
 - `timestep_weights` ('timesteps',) - it's common to make simulation basing not on the whole year data but just focus on some "representative" days that accumulate avg data from several days. The amount of those days is specified in this variable for each timestep.
 
 
+### Attributes:
+
+Mostly those describe some additional information about Dataset, without any dimensions. Mostly not important for visualisations.
+
+- allow_operate_mode - (?)
+- applied_overrides - 
+- calliope_version
+- defaults
+- scenario
+
+
+
+--- 
+
+## What might be interesting to visualize:
+
+Basing on the list of input fields and what might be interesting and not too complicated for user, I created a list of what visualisations I will try to create. 
+
+- create a map with all locations
+- some stats per location(when one clicks/points with cursor):
+  - name of the location;
+  - list of located techs there(dropdown menu?..), filter with carriers included(like show electricity or heat only) and/or their type(parent);
+  - some small dashboard with key parameters about the whole location like area, total consumption/supply, .. (to think about it!);
+  - demand stats - some kind of button to show the timeseries data with demand in the specified period, with possibility to see some general points about this timeseries data like avg per day/season/year;
+  - PV resource timeseries data visualisation - how much sunlight and therefore how much electricity out of it it's possible to gain;
+- when one select non-transition tech, one should be able to see:
+  - tech name, type, color, capacity(min/max), lifetime, consumption(whether it needs energy itself), production(whether it produces energy), efficiency(fraction), parasitic_eff, whether it depends on some finite source or is potentially unlimited(and variables in `loc_techs_finite_resource` dimension)
+- when **transmission** tech is selected, one should be able to see:
+  - its carrier;
+  - distance(+ info whether it's calculated as a straight line or was filled in manually)
+  - max energy cap;
+  - energy efficiency;
+  - lifetime;
+  - costs;
+- when **supply** tech is selected, one should be able to see:
+  - its carrier
+  - whether it's finite or infinite
+    - if finite: see the resource restriction(timeseries data/const) + other resource related variables
+  - min/max capacity(how powerful it is)
+  - costs(to be researched deeper)
+- when **battery** tech is selected, one should be able to see:
+  - energy_cap
+  - storage_cap
+  - energy_eff
+  - energy_cap_per_storage_cap_max(?)
+  - storage_loss
+- ... and so on for every tech type ...
+
 
 
