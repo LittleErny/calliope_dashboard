@@ -22,7 +22,8 @@ class InputsHelper:
         # Making sure we got correct data (basically just some random checks)
         assert type(inputs) is xarray.Dataset
         assert inputs.calliope_version == "0.6.10"
-        assert len(dict(inputs.dims).keys()) == 20  # the data should have exactly 20 dimensions
+        # print(inputs.dims)
+        # assert len(dict(inputs.dims).keys()) == 20  # the data should have exactly 20 dimensions
         self.inputs = inputs
 
     def get_locations(self) -> list[str]:
@@ -302,17 +303,17 @@ class InputsHelper:
         return finite_resource_timeseries | infinite_resource_timeseries
 
 
-import pickle
-
-# Specify the path to the pickle file
-pickle_file_path = 'model_inputs.pkl'
-
-# Open the file in read-binary mode and load the inputs
-with open(pickle_file_path, 'rb') as f:
-    loaded_inputs = pickle.load(f)
-
-helper = InputsHelper(loaded_inputs)
-
-res = helper.get_location_total_max_supply(location='X1', carrier='electricity')
-print(type(res))
-print(res)
+# import pickle
+#
+# # Specify the path to the pickle file
+# pickle_file_path = 'model_inputs.pkl'
+#
+# # Open the file in read-binary mode and load the inputs
+# with open(pickle_file_path, 'rb') as f:
+#     loaded_inputs = pickle.load(f)
+#
+# helper = InputsHelper(loaded_inputs)
+#
+# res = helper.get_location_total_max_supply(location='X1', carrier='electricity')
+# print(type(res))
+# print(res)

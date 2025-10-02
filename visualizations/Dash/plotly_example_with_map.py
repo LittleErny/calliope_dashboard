@@ -2,89 +2,122 @@ import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
+from Calliope_learning.visualizations.inputs_helper import InputsHelper
+import pickle
 
-# Germany city data
-cities = ['Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt']
-latitudes = [52.5200, 53.5511, 48.1351, 50.9375, 50.1109]
-longitudes = [13.4050, 9.9937, 11.5820, 6.9603, 8.6821]
-populations = [3769000, 1841000, 1472000, 1086000, 763000]
-states = ['Berlin', 'Hamburg', 'Bavaria', 'North Rhine-Westphalia', 'Hesse']
 
-# Initialize Dash app
-app = dash.Dash(__name__)
+class CityMapDashboard:
+    def __init__(self, input_helper: InputsHelper):
+        # Germany city data
+        # self.cities = input_helper.get_locations()
+        self.input_helper = input_helper
+        loc_coords = input_helper.get_loc_coords()
+        self.locations, self.longitudes, self.latitudes = zip(*loc_coords)
 
-# App layout: map on left, info panel on right
-app.layout = html.Div(style={'display': 'flex'}, children=[
-    html.Div(style={'flex': '2', 'padding': '10px'}, children=[
-        html.H1("German Cities Map"),
-        dcc.Graph(
-            id='map-graph',
-            style={'height': '600px'}  # fixed height to prevent jumping
+        # Initialize Dash app
+        self.app = dash.Dash(__name__)
+
+        # Set layout
+        self.app.layout = html.Div(style={'display': 'flex'}, children=[
+            html.Div(style={'flex': '2', 'padding': '10px'}, children=[
+                html.H1("German Cities Map"),
+                dcc.Graph(id='map-graph', style={'height': '600px'})
+            ]),
+            html.Div(id='info-panel', style={
+                'flex': '1',
+                'padding': '10px',
+                'border-left': '1px solid #ccc',
+                'minHeight': '500px',
+                'backgroundColor': '#f9f9f9'
+            }, children=[
+                html.H3("Location Info"),
+                html.P("Click a city to see details here.")
+            ])
+        ])
+
+        # Register callbacks
+        self.register_callbacks()
+
+    def register_callbacks(self):
+        # Map update
+        @self.app.callback(
+            Output('map-graph', 'figure'),
+            Input('map-graph', 'id')  # dummy input to trigger initial render
         )
+        def update_map(_):
+            fig = go.Figure(go.Scattermap(
+                mode='markers+text',
+                lon=self.longitudes,
+                lat=self.latitudes,
+                text=self.locations,
+                marker=dict(size=20, color='blue'),
+                textposition='top center',
+                # customdata=[{'population': 2, 'state': 1} for _ in self.locations]
+            ))
 
-    ]),
-    html.Div(id='info-panel', style={
-        'flex': '1',
-        'padding': '10px',
-        'border-left': '1px solid #ccc',
-        'minHeight': '500px',
-        'backgroundColor': '#f9f9f9'
-    }, children=[
-        html.H3("Location Info"),
-        html.P("Click a city to see details here.")
-    ])
-])
+            fig.update_layout(
+                title="German Cities",
+                map=dict(
+                    bearing=0,
+                    center=dict(
+                        lat=51.17,
+                        lon=10.45
+                    ),
+                    pitch=0,
+                    zoom=5.2
+                ),
+                mapbox_style='open-street-map',
+                mapbox_zoom=5,
+                mapbox_center={"lat": 51.1657, "lon": 10.4515},
+                margin={"r": 0, "t": 50, "l": 0, "b": 0},
+                autosize=True
+            )
+            return fig
 
-# Callback to generate the map (no dropdown input needed)
-@app.callback(
-    Output('map-graph', 'figure'),
-    Input('map-graph', 'id')  # dummy input to trigger initial render
-)
-def update_map(_):
-    # Always show all cities
-    fig = go.Figure(go.Scattermapbox(
-        mode='markers+text',
-        lon=longitudes,
-        lat=latitudes,
-        text=cities,
-        marker=dict(size=12, color='blue'),
-        textposition='top center',
-        customdata=[{'population': pop, 'state': st} for pop, st in zip(populations, states)]
-    ))
+        # Info panel update
+        @self.app.callback(
+            Output('info-panel', 'children'),
+            Input('map-graph', 'clickData')
+        )
+        def display_info(clickData):
+            if clickData:
+                print(clickData)
+                point_data = clickData['points'][0]
+                city_name = point_data['text']
 
-    fig.update_layout(
-        title="German Cities",
-        mapbox_style='open-street-map',
-        mapbox_zoom=5,
-        mapbox_center={"lat": 51.1657, "lon": 10.4515},  # center Germany
-        margin={"r":0,"t":50,"l":0,"b":0},
-        autosize=True
-    )
+                # Get location area
+                area = self.input_helper.get_location_area(city_name)
 
-    return fig
+                # Get city techs
+                techs = self.input_helper.get_location_techs(city_name)
+                # print(techs)
+
+                # Here I want to render a dropdown men
+
+                # Return the elements to display
+                return [
+                    html.H3(f"{city_name}, Germany"),
+                    html.P(f"Location area: {area}"),
+                ]
+            else:
+                return [
+                    html.H3("Location Info"),
+                    html.P("Click a city to see details here.")
+                ]
+
+    def run(self):
+        self.app.run(debug=True)
 
 
-# Callback to update the info panel based on click
-@app.callback(
-    Output('info-panel', 'children'),
-    Input('map-graph', 'clickData')
-)
-def display_info(clickData):
-    if clickData:
-        point_data = clickData['points'][0]
-        city_name = point_data['text']
-        population = point_data['customdata']['population']
-        state = point_data['customdata']['state']
-        return [
-            html.H3(f"{city_name}, {state}"),
-            html.P(f"Population: {population:,}")  # formatted with commas
-        ]
-    else:
-        return [
-            html.H3("Location Info"),
-            html.P("Click a city to see details here.")
-        ]
-
-# Run the app
+# Run the dashboard
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Specify the path to the pickle file
+    pickle_file_path = '../german_model_inputs.pkl'
+
+    # Open the file in read-binary mode and load the inputs
+    with open(pickle_file_path, 'rb') as f:
+        loaded_inputs = pickle.load(f)
+
+    helper = InputsHelper(loaded_inputs)
+    dashboard = CityMapDashboard(helper)
+    dashboard.run()
