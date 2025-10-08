@@ -329,6 +329,10 @@ class InputsHelper:
         return finite_resource_timeseries | infinite_resource_timeseries
 
 
+    def tech_is_storage(self, tech_name: str) -> bool:
+        # print(list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name)].split('.')[-1])
+        return list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name)].split('.')[-1] == "storage"
+
     # def get_tech_stats(self, location, tech, carrier):
     #
 

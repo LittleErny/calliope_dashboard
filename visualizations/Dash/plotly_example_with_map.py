@@ -1,13 +1,20 @@
 import dash
 import numpy as np
 from dash import dcc, html
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output
 import plotly.graph_objects as go
 from Calliope_learning.visualizations.inputs_helper import InputsHelper
 import pickle
 
 
 class CityMapDashboard:
+    """
+    Split the single combined time series into multiple graphs:
+      - One graph for Demand
+      - One graph per technology (e.g., PV, WIND, etc.)
+    All graphs appear stacked in the scrollable right panel, each inside its own card.
+    """
+
     def __init__(self, input_helper: InputsHelper):
         self.input_helper = input_helper
         loc_coords = input_helper.get_loc_coords()
@@ -22,13 +29,10 @@ class CityMapDashboard:
         # Register callbacks
         self.register_callbacks()
 
+    # -----------------------------
+    # Layout
+    # -----------------------------
     def layout(self):
-        """
-
-        Returns
-        -------
-
-        """
         return html.Div(style={'display': 'flex', 'height': '100vh'}, children=[
             # Left: map
             html.Div(style={'flex': '2', 'padding': '10px'}, children=[
@@ -36,7 +40,7 @@ class CityMapDashboard:
                 dcc.Graph(id='map-graph', style={'height': '600px'})
             ]),
 
-            # Right: info panel (static placeholder)
+            # Right: info panel
             html.Div(id='info-panel', style={
                 'flex': '1',
                 'padding': '10px',
@@ -45,12 +49,11 @@ class CityMapDashboard:
                 'display': 'flex',
                 'flexDirection': 'column',
                 'height': '100%',
-
             }, children=[
                 html.H3("Location Info"),
                 html.P("Click a city to see details here."),
 
-                # placeholder dropdown (invisible at start)
+                # Keep dropdown ID always present; hidden until a city is selected
                 dcc.Dropdown(
                     id="carrier-dropdown",
                     options=[],
@@ -59,23 +62,20 @@ class CityMapDashboard:
                     style={"display": "none"}
                 ),
 
+                # Scrollable area with per-tech cards (each includes its own graph)
                 html.Div(id="techs-list", style={
                     "marginTop": "20px",
                     "overflowY": "auto",
                     "flex": "1"
-                }, children=[
-                    dcc.Graph(
-                        id="timeseries-graph",
-                        style={"height": "300px", "width": "100%"}  # force full width
-                    )
-                ]
-
-                         ),
+                })
             ])
         ])
 
+    # -----------------------------
+    # Callbacks
+    # -----------------------------
     def register_callbacks(self):
-        # Map update
+        # Map update (initial render)
         @self.app.callback(
             Output('map-graph', 'figure'),
             Input('map-graph', 'id')  # dummy input to trigger initial render
@@ -102,8 +102,6 @@ class CityMapDashboard:
                     zoom=5.2
                 ),
                 mapbox_style='open-street-map',
-                # mapbox_zoom=5,
-                # mapbox_center={"lat": 51.1657, "lon": 10.4515},
                 margin={"r": 0, "t": 50, "l": 0, "b": 0},  # small margin from above for the map title
                 autosize=True
             )
@@ -121,7 +119,7 @@ class CityMapDashboard:
                 city_name = clickData['points'][0]['text']
                 area = self.input_helper.get_location_area(city_name)
                 carriers = self.input_helper.get_location_carriers(city_name)
-
+                assert len(carriers) > 0
                 return [
                     html.H3(f"{city_name}, Germany"),
                     html.P(f"Location area: {area}"),
@@ -131,28 +129,19 @@ class CityMapDashboard:
                         id="carrier-dropdown",
                         options=[{"label": c, "value": c} for c in carriers],
                         value=carriers[0],
-                        clearable=False
+                        clearable=False,
                     ),
-
-                    # dcc.Graph(id="timeseries-graph", style={"height": "300px"}),  # new timeseries graph
-
                     html.Div(id="techs-list", style={
                         "marginTop": "20px",
                         "overflowY": "auto",
                         "flex": "1"
-                    }, children=[
-                        dcc.Graph(
-                            id="timeseries-graph",
-                            style={"height": "300px", "width": "100%"}  # force full width
-                        )
-                    ])
+                    })
                 ]
             else:
                 # ensure the dropdown id always exists in the layout (hidden / empty)
                 return [
                     html.H3("Location Info"),
                     html.P("Click a city to see details here."),
-                    # placeholder dropdown — keeps the id in DOM so callbacks referencing it never fail
                     dcc.Dropdown(
                         id="carrier-dropdown",
                         options=[],  # no options when nothing is selected
@@ -167,7 +156,7 @@ class CityMapDashboard:
                     })
                 ]
 
-        # Tech list update
+        # Build the list of per-tech cards + a separate Demand chart in the beginning
         @self.app.callback(
             Output("techs-list", "children"),
             Input("carrier-dropdown", "value"),
@@ -178,104 +167,130 @@ class CityMapDashboard:
                 return []
 
             city_name = clickData['points'][0]['text']
+
+            # ---------------- Demand ----------------
+            demand_arrays = [
+                -1 * np.array(arr) for arr in self.input_helper.get_location_demand(city_name, selected_carrier)
+            ]  # negative to show as consumption, as in your original
+
+            total_demand = None
+            if len(demand_arrays) > 0:
+                total_demand = np.sum(np.vstack(demand_arrays), axis=0)
+
+            # ---------------- Supply ----------------
+            # {tech_name: np.array([...])}
+            supply_dict = self.input_helper.get_location_total_max_supply(city_name, selected_carrier)
+
+            # Discover technologies present at this location for the carrier
             loc_techs = self.input_helper.get_location_techs(city_name,
                                                              selected_carrier)  # [(loc_name, tech_name, carrier),]
+            tech_names = sorted({x[1] for x in loc_techs})
 
-            techs_names = [x[1] for x in loc_techs]
+            print(supply_dict, loc_techs, tech_names, sep='\n\n---\n\n')
 
-            return [dcc.Graph(
-                id="timeseries-graph",
-                style={"height": "300px", "width": "100%"}  # force full width
-            )] + [
+            # Consistent card style
+            card_style = {
+                "border": "1px solid #ccc",
+                "borderRadius": "6px",
+                "padding": "10px",
+                "marginBottom": "12px",
+                "backgroundColor": "#fff",
+                "boxShadow": "0 1px 2px rgba(0,0,0,0.06)"
+            }
 
-                html.Div(style={
-                    "border": "1px solid #ccc",
-                    "borderRadius": "5px",
-                    "padding": "10px",
-                    "marginBottom": "10px",
-                    "backgroundColor": "#fff"
-                }, children=[
-                    html.H4(t, style={"marginBottom": "5px"}),
-                    html.Ul(children=[
-                        html.Li("Type: Supply" if "PV" in t else "Storage"),
-                        html.Li("Capacity: 100 MW"),
-                        html.Li("Efficiency: 85%"),
-                        html.Li("Lifetime: 20 years"),
-                    ])
-                ]) for t in techs_names
-            ]
+            # Consistent figure layout tweaks
+            def apply_layout(fig: go.Figure, title: str):
+                fig.update_layout(
+                    title=title,
+                    xaxis_title="Time step",
+                    yaxis_title="Energy (MWh)",
+                    hovermode="x unified",
+                    showlegend=False,
+                    margin=dict(t=40, r=10, b=20, l=40),
+                )
+                fig.update_xaxes(showgrid=True, gridwidth=1, griddash="dot")
+                fig.update_yaxes(showgrid=True, gridwidth=1, griddash="dot")
+                return fig
 
-        @self.app.callback(
-            Output("timeseries-graph", "figure"),
-            Input("carrier-dropdown", "value"),
-            Input("map-graph", "clickData")
-        )
-        def update_timeseries(selected_carrier, clickData):
-            # print("update_timeseries", clickData, selected_carrier)
-            if not clickData or not selected_carrier:
-                # print("update_timeseries: no click data")
-                return go.Figure()  # empty figure if nothing selected
+            children = []
 
-            # print("update_timeseries: click data")
-            city_name = clickData['points'][0]['text']
-
-            # Load data
-            demand_arrays = [-1 * i for i in self.input_helper.get_location_demand(city_name, selected_carrier)]
-            supply_dict = self.input_helper.get_location_total_max_supply(city_name, selected_carrier)
-            # print(supply_dict)
-            print(demand_arrays)
-
-            # Process demand
-            if demand_arrays:
-                total_demand = np.sum(np.vstack(demand_arrays), axis=0)
-            else:
-                # fallback in case no demand arrays
-                total_demand = np.zeros_like(next(iter(supply_dict.values()))) if supply_dict else np.array([])
-
-            # Create figure
-            fig = go.Figure()
-            if total_demand.size > 0:
-                fig.add_trace(go.Scatter(
+            # Demand card (if available)
+            if total_demand is not None:
+                fig_d = go.Figure()
+                fig_d.add_trace(go.Scatter(
                     y=total_demand,
                     x=np.arange(len(total_demand)),
                     name="Demand",
-                    line=dict(color='red'),
+                    line=dict(width=2),
                     hovertemplate="%{y:.2f} MWh<extra>%{x}</extra>"
                 ))
+                fig_d = apply_layout(fig_d, f"Demand — {city_name} ({selected_carrier})")
 
-            # Add supply traces
-            colors = ['blue', 'green', 'orange', 'purple', 'cyan']
-            for i, (tech_name, supply_array) in enumerate(supply_dict.items()):
-                fig.add_trace(go.Scatter(
-                    y=supply_array,
-                    x=np.arange(len(supply_array)),
-                    name=f"Supply: {tech_name}",
-                    line=dict(color=colors[i % len(colors)]),
+                children.append(
+                    html.Div(style=card_style, children=[
+                        html.H4("Demand", style={"marginBottom": "6px"}),
+                        dcc.Graph(figure=fig_d, style={"height": "240px", "width": "100%"})
+                    ])
+                )
+
+            # One card per technology
+            for tech in tech_names:
+                arr = supply_dict.get(f"{city_name}::{tech}")
+                if arr is None:
+                    # Skip technologies not present in the aggregated supply
+                    print("skipped", tech)
+                    continue
+
+                fig_s = go.Figure()
+                fig_s.add_trace(go.Scatter(
+                    y=np.array(arr),
+                    x=np.arange(len(arr)),
+                    name=f"{tech} Supply",
+                    line=dict(width=2),
                     hovertemplate="%{y:.2f} MWh<extra>%{x}</extra>"
                 ))
+                fig_s = apply_layout(fig_s, f"{tech} — {city_name} ({selected_carrier})")
 
-            fig.update_layout(
-                title=f"Energy Time Series - {city_name} ({selected_carrier})",
-                xaxis_title="Time step",
-                yaxis_title="Energy (MWh)",
-                hovermode="x unified",
-                legend=dict(
-                    orientation="h",  # horizontal legend
-                    yanchor="top",  # attaching to the top border of legend
-                    y=-0.4,  # put it under the graph
-                    xanchor="center",  # and center it
-                    x=0.5
-                ),
-                margin=dict(b=100)  # add some space below for the legend
-            )
+                # Simple static details (kept from your original UI)
+                details = html.Ul(children=[
+                    html.Li("Type: Supply"),
+                    html.Li("Capacity: XXX MW"),
+                    html.Li("Efficiency: XX%"),
+                    html.Li("Lifetime: XX years"),
+                ])
 
-            return fig
+                children.append(
+                    html.Div(style=card_style, children=[
+                        html.H4(tech, style={"marginBottom": "6px"}),
+                        details,
+                        dcc.Graph(figure=fig_s, style={"height": "240px", "width": "100%"})
+                    ])
+                )
+
+            for tech in tech_names:
+                if self.input_helper.tech_is_storage(tech):
+                    details = html.Ul(children=[
+                        html.Li("Type: Storage"),
+                        html.Li("Capacity: XXXX MW"),
+                        html.Li("Efficiency: XX%"),
+                        html.Li("Lifetime: XX years"),
+                    ])
+                    children.append(
+                        html.Div(style=card_style, children=[
+                            html.H4(tech, style={"marginBottom": "6px"}),
+                            details
+                        ])
+                    )
+
+            return children
 
     def run(self):
         self.app.run(debug=True)
 
 
+# ---------------
 # Run the dashboard
+# ---------------
 if __name__ == '__main__':
     # Specify the path to the pickle file
     pickle_file_path = '../german_model_inputs.pkl'
