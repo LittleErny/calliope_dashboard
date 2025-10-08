@@ -103,6 +103,32 @@ class InputsHelper:
 
             return [tuple(i for i in j.split('::')) for j in target_loc_tech_carrier]
 
+    def get_location_carriers(self, location: str) -> list[str]:
+        """
+        Return a sorted list of unique carriers associated with a given location.
+
+        Parameters
+        ----------
+        location : str
+            The name or identifier of the location for which to retrieve
+            the associated carriers.
+
+        Returns
+        -------
+        list[str]
+            A sorted list of unique carrier names (strings) associated with
+            technologies present at the specified location.
+
+        Raises
+        ------
+        AssertionError
+            If the provided location does not exist in `self.inputs.locs.data`.
+
+        """
+
+        loc_techs = self.get_location_techs(location)
+        return list(sorted(list(set([x[2] for x in loc_techs]))))
+
     def get_location_area(self, location: str) -> float:
         """
         Return the total available area for a given location.
@@ -291,7 +317,7 @@ class InputsHelper:
         finite_resource_timeseries = {self.inputs.loc_techs_finite_resource.data[i]: self.inputs.resource.data[i] for i
                                       in target_indexes}
 
-        n_timesteps = len(loaded_inputs.timesteps)
+        n_timesteps = len(self.inputs.timesteps)
 
         # find out which of supply techs do not depend on timeseries
         infinite_resource_ltc = list(
@@ -303,10 +329,13 @@ class InputsHelper:
         return finite_resource_timeseries | infinite_resource_timeseries
 
 
+    # def get_tech_stats(self, location, tech, carrier):
+    #
+
 # import pickle
 #
 # # Specify the path to the pickle file
-# pickle_file_path = 'model_inputs.pkl'
+# pickle_file_path = 'german_model_inputs.pkl'
 #
 # # Open the file in read-binary mode and load the inputs
 # with open(pickle_file_path, 'rb') as f:
@@ -314,6 +343,6 @@ class InputsHelper:
 #
 # helper = InputsHelper(loaded_inputs)
 #
-# res = helper.get_location_total_max_supply(location='X1', carrier='electricity')
+# res = helper.get_location_carriers(location='Berlin')
 # print(type(res))
 # print(res)
