@@ -1,8 +1,12 @@
+import math
+
 import dash
 import numpy as np
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
+from fontTools.feaLib import location
+
 from Calliope_learning.visualizations.inputs_helper import InputsHelper
 import pickle
 
@@ -186,7 +190,6 @@ class CityMapDashboard:
                                                              selected_carrier)  # [(loc_name, tech_name, carrier),]
             tech_names = sorted({x[1] for x in loc_techs})
 
-            print(supply_dict, loc_techs, tech_names, sep='\n\n---\n\n')
 
             # Consistent card style
             card_style = {
@@ -214,9 +217,11 @@ class CityMapDashboard:
 
             children = []
 
+            # First always goes demand.
             # Demand card (if available)
             if total_demand is not None:
                 fig_d = go.Figure()
+
                 fig_d.add_trace(go.Scatter(
                     y=total_demand,
                     x=np.arange(len(total_demand)),
@@ -233,12 +238,12 @@ class CityMapDashboard:
                     ])
                 )
 
+            # Second go all the supply techs
             # One card per technology
             for tech in tech_names:
                 arr = supply_dict.get(f"{city_name}::{tech}")
                 if arr is None:
                     # Skip technologies not present in the aggregated supply
-                    print("skipped", tech)
                     continue
 
                 fig_s = go.Figure()
@@ -251,13 +256,42 @@ class CityMapDashboard:
                 ))
                 fig_s = apply_layout(fig_s, f"{tech} — {city_name} ({selected_carrier})")
 
-                # Simple static details (kept from your original UI)
-                details = html.Ul(children=[
-                    html.Li("Type: Supply"),
-                    html.Li("Capacity: XXX MW"),
-                    html.Li("Efficiency: XX%"),
-                    html.Li("Lifetime: XX years"),
-                ])
+                # Simple static details
+                details = self.input_helper.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
+                tech_children = []
+
+                for key, value in details.items():
+                    if key == "lifetime" and not math.isnan(value):
+                        tech_children.append(
+                            html.Li(f"Lifetime: {value} years")
+                        )
+                    if key == "energy_cap_max" and not math.isnan(value):
+                        tech_children.append(
+                            html.Li(f"Maximum Energy Capacity: {value} kW")
+                        )
+                    if key == "energy_con" and not math.isnan(value):
+                        tech_children.append(
+                            html.Li(f"Energy Consumption: {value} kW")
+                        )
+                    if key == "energy_eff" and not math.isnan(value):
+                        tech_children.append(
+                            html.Li(f"Energy Efficiency: {value * 100}%")
+                        )
+                    if key == "parasitic_eff" and not math.isnan(value):
+                        tech_children.append(
+                            html.Li(f"Parasitic Efficiency: {value * 100}%")
+                        )
+                    if key == "resource_area_max" and not math.isnan(value):
+                        tech_children.append(
+                            html.Li(f"Maximum Resource Area: {value} m²")
+                        )
+                    if key == "resource_eff" and not math.isnan(value):
+                        tech_children.append(
+                            html.Li(f"Resource Efficiency: {value * 100}%")
+                        )
+
+
+                details = html.Ul(children=tech_children)
 
                 children.append(
                     html.Div(style=card_style, children=[
@@ -267,14 +301,48 @@ class CityMapDashboard:
                     ])
                 )
 
+            # Lastly storage techs go
             for tech in tech_names:
                 if self.input_helper.tech_is_storage(tech):
-                    details = html.Ul(children=[
-                        html.Li("Type: Storage"),
-                        html.Li("Capacity: XXXX MW"),
-                        html.Li("Efficiency: XX%"),
-                        html.Li("Lifetime: XX years"),
-                    ])
+                    details = self.input_helper.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
+                    tech_children = []
+
+                    for key, value in details.items():
+                        if key == "lifetime" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Lifetime: {value} years")
+                            )
+                        if key == "energy_cap_max" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Maximum Discharge Power: {value} kW")
+                            )
+                        if key == "energy_con" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Energy Consumption: {value} kW")
+                            )
+                        if key == "energy_eff" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Energy Efficiency: {value * 100}%")
+                            )
+                        if key == "parasitic_eff" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Parasitic Efficiency: {value * 100}%")
+                            )
+                        if key == "resource_area_max" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Maximum Resource Area: {value} m²")
+                            )
+                        if key == "resource_eff" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Resource Efficiency: {value * 100}%")
+                            )
+
+                        if key == "storage_cap_max" and not math.isnan(value):
+                            tech_children.append(
+                                html.Li(f"Max Storage Capacity: {value} kWh")
+                            )
+
+                    details = html.Ul(children=tech_children)
                     children.append(
                         html.Div(style=card_style, children=[
                             html.H4(tech, style={"marginBottom": "6px"}),

@@ -22,8 +22,6 @@ class InputsHelper:
         # Making sure we got correct data (basically just some random checks)
         assert type(inputs) is xarray.Dataset
         assert inputs.calliope_version == "0.6.10"
-        # print(inputs.dims)
-        # assert len(dict(inputs.dims).keys()) == 20  # the data should have exactly 20 dimensions
         self.inputs = inputs
 
     def get_locations(self) -> list[str]:
@@ -328,13 +326,100 @@ class InputsHelper:
 
         return finite_resource_timeseries | infinite_resource_timeseries
 
-
     def tech_is_storage(self, tech_name: str) -> bool:
-        # print(list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name)].split('.')[-1])
-        return list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name)].split('.')[-1] == "storage"
+        return list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name)].split('.')[
+            -1] == "storage"
 
-    # def get_tech_stats(self, location, tech, carrier):
-    #
+    def get_loc_tech_carrier_stats(self, location, tech, carrier):
+        # Extract the parent(type) of the current tech
+        tech_type = self.inputs.inheritance.data[list(self.inputs.techs.data).index(tech)].split('.')[-1]
+
+        details = {}
+
+        if tech_type == "supply_plus":
+            loc_tech_search_str = f"{location}::{tech}"
+            loc_tech_index = list(self.inputs.loc_techs.data).index(loc_tech_search_str)
+
+            # energy_cap_max
+            details["energy_cap_max"] = self.inputs.energy_cap_max.data[loc_tech_index]
+
+            # energy_con
+            details["energy_con"] = self.inputs.energy_con.data[loc_tech_index]
+
+            # energy_eff
+            details["energy_eff"] = self.inputs.energy_eff.data[loc_tech_index]
+
+            # parasitic_eff
+            loc_techs_supply_plus_search_str = loc_tech_search_str  # apparently those are the same
+            if loc_tech_search_str in list(self.inputs.loc_techs_supply_plus.data):
+                loc_techs_supply_plus_index = list(self.inputs.loc_techs_supply_plus.data).index(
+                    loc_techs_supply_plus_search_str)
+                details["parasitic_eff"] = self.inputs.parasitic_eff.data[loc_techs_supply_plus_index]
+
+            # resource_area_max
+            resource_area_max_search_str = loc_tech_search_str  # apparently those are the same
+            if resource_area_max_search_str in list(self.inputs.loc_techs_area.data):
+                resource_area_max_index = list(self.inputs.loc_techs_area.data).index(resource_area_max_search_str)
+                details["resource_area_max"] = self.inputs.resource_area_max.data[resource_area_max_index]
+
+            # resource_eff
+            resource_eff_search_str = loc_tech_search_str
+            if resource_eff_search_str in list(self.inputs.resource_eff.data):
+                resource_eff_index = list(self.inputs.resource_eff.data).index(resource_eff_search_str)
+                details["resource_eff"] = self.inputs.resource_eff.data[resource_eff_index]
+
+            # lifetime
+            details["lifetime"] = self.inputs.lifetime.data[loc_tech_index]
+
+
+        elif tech_type == "supply":
+            raise NotImplementedError
+
+        elif tech_type == "storage":
+            loc_tech_search_str = f"{location}::{tech}"
+            loc_tech_index = list(self.inputs.loc_techs.data).index(loc_tech_search_str)
+
+            # energy_cap_max
+            details["energy_cap_max"] = self.inputs.energy_cap_max.data[loc_tech_index]
+
+            # storage_cap_max
+            loc_techs_store_search_str = loc_tech_search_str
+            if loc_techs_store_search_str in list(self.inputs.loc_techs_store.data):
+                loc_techs_store_index = list(self.inputs.loc_techs_store.data).index(loc_techs_store_search_str)
+                details["storage_cap_max"] = self.inputs.storage_cap_max.data[loc_techs_store_index]
+
+            # energy_con
+            details["energy_con"] = self.inputs.energy_con.data[loc_tech_index]
+
+            # energy_eff
+            details["energy_eff"] = self.inputs.energy_eff.data[loc_tech_index]
+
+            # resource_eff
+            resource_eff_search_str = loc_tech_search_str
+            if resource_eff_search_str in list(self.inputs.resource_eff.data):
+                resource_eff_index = list(self.inputs.resource_eff.data).index(resource_eff_search_str)
+                details["resource_eff"] = self.inputs.resource_eff.data[resource_eff_index]
+
+            # lifetime
+            details["lifetime"] = self.inputs.lifetime.data[loc_tech_index]
+
+            # resource_area_max
+            resource_area_max_search_str = loc_tech_search_str  # apparently those are the same
+            if resource_area_max_search_str in list(self.inputs.loc_techs_area.data):
+                resource_area_max_index = list(self.inputs.loc_techs_area.data).index(resource_area_max_search_str)
+                details["resource_area_max"] = self.inputs.resource_area_max.data[resource_area_max_index]
+
+
+
+        elif tech_type == "transmission":
+            raise NotImplementedError
+
+        elif tech_type == "conversion":
+            raise NotImplementedError
+
+        else:
+            raise NotImplementedError
+        return details
 
 # import pickle
 #
