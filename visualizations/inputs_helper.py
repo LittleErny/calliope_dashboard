@@ -61,6 +61,12 @@ class InputsHelper:
 
         return list(zip(loc_names, coords_x, coords_y))
 
+    def get_loc_coords_as_dict(self) -> dict[str, tuple[int, int]]:
+        # ToDo: write docstring
+        coords = self.get_loc_coords()
+        loc_coords_as_dict = {x[0]: (x[1], x[2]) for x in coords}
+        return loc_coords_as_dict
+
     def get_location_techs(self, location: str, carrier_filter: str = None) -> list[tuple[str, str, str]]:
         """
         Return technologies located in a specific location.
@@ -327,8 +333,9 @@ class InputsHelper:
         return finite_resource_timeseries | infinite_resource_timeseries
 
     def tech_is_storage(self, tech_name: str) -> bool:
-        return list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name)].split('.')[
-            -1] == "storage"
+        return \
+            list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name.split(':')[0])].split('.')[
+                -1] == "storage"
 
     def get_loc_tech_carrier_stats(self, location, tech, carrier):
         # Extract the parent(type) of the current tech
@@ -421,17 +428,50 @@ class InputsHelper:
             raise NotImplementedError
         return details
 
+    def get_transmission_lines(self) -> list[tuple[str, str]]:
+        # First save all defined transmission lines in the form (loc_from, loc_to)
+        # candidates = [(
+        #     transmission.split("::")[0],
+        #     transmission.split("::")[1].split(":")[1],
+        # ) for transmission in list(self.inputs.loc_techs_transmission.data)]
+        candidates = list(self.inputs.loc_techs_transmission.data)
+
+        # After that we have to filter out those which are not able to transmiss because of one_way=True
+
+        for i, tech in enumerate(self.inputs.loc_techs.data):
+            one_way = True if self.inputs.one_way.data[i] == 1 else False
+            if one_way:
+                if int(self.inputs.energy_prod.data[
+                           i]) == 1:  # It means that the energy does not flow in this direction
+                    # Delete this tech from the candidate list
+                    del candidates[candidates.index(tech)]
+
+        # can_to_return = set(candidates)
+        # del_can = set(self.inputs.loc_techs_transmission.data).difference(can_to_return)
+        # print("deleted:", del_can)
+        res = [(
+            transmission.split("::")[0],
+            transmission.split("::")[1].split(":")[1],
+        ) for transmission in candidates]  # [(from, to), ..]
+
+        coords_dict = self.get_loc_coords_as_dict()
+
+        res = [((x[0], coords_dict[x[0]][0], coords_dict[x[0]][1]), (x[1], coords_dict[x[1]][0], coords_dict[x[1]][1]))
+               for x in res]
+        return res
+
 # import pickle
 #
 # # Specify the path to the pickle file
-# pickle_file_path = 'german_model_inputs.pkl'
+# pickle_file_path = 'german_model_inputs_with_transmissions.pkl'
 #
 # # Open the file in read-binary mode and load the inputs
 # with open(pickle_file_path, 'rb') as f:
 #     loaded_inputs = pickle.load(f)
 #
 # helper = InputsHelper(loaded_inputs)
-#
-# res = helper.get_location_carriers(location='Berlin')
+# # print(loaded_inputs.loc_techs_transmission)
+# res = helper.get_transmission_lines()
 # print(type(res))
-# print(res)
+# print(sorted(res))
+# print(len(res))

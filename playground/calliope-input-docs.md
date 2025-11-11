@@ -50,7 +50,7 @@ Exactly the arrays with described dimensions from above. So, for example, data v
 - `energy_cap_max` ('loc_techs',) - the array of all max capacities for each technology.
 - `energy_con` ('loc_techs',) - energy consumption - boolean value of whether the technology at a specific location is allowed to consume energy. `1` means yes; `nan` - no.
 - `energy_eff` ('loc_techs',) - energy efficiency - is a fraction and represent which % of energy is transferred further to carrier_out.
-- `energy_prod` ('loc_techs',) - energy production - whether this technology is allowed to supply energy to carrier. `1` if yes, `nan` if no.
+- `energy_prod` ('loc_techs',) - energy production - whether this technology is allowed to supply energy to carrier. `1` if yes, `nan` if no. Can also be used to determine the direction of one-way transmission techs.
 - `export_carrier` ('loc_techs_export',) - shows the names of carriers for each loc_tech that is allowed to export.
 - `force_resource` ('loc_techs_finite_resource',) - each tech with finite resource(such as PV, which resource is limited by time-series data) has a flag representing whether this tech must consume all resource at once or not. If `False`, tech is allowed to take less resource than it's given.
 - `inheritance` ('techs',) - shows from which base tech those techs are inherited. This is specified in `essentials.parent` field in `techs.yaml`.

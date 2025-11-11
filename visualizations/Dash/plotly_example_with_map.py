@@ -22,7 +22,23 @@ class CityMapDashboard:
     def __init__(self, input_helper: InputsHelper):
         self.input_helper = input_helper
         loc_coords = input_helper.get_loc_coords()
-        self.locations, self.longitudes, self.latitudes = zip(*loc_coords)
+
+        # Insert some (None, None, None) so that the lines btw cities are not drown automatically
+        for i in range(len(loc_coords) - 1, 0, -1):
+            loc_coords.insert(i, (None, None, None))
+
+        # First import just cities
+        self.locations, self.longitudes, self.latitudes = [list(x) for x in zip(*loc_coords)]
+
+        # Then import transmission info
+        lines = self.input_helper.get_transmission_lines()
+        for line in lines:
+            loc1, loc2 = line
+            loc1_name, loc1_x, loc1_y = loc1
+            loc2_name, loc2_x, loc2_y = loc2
+            self.locations += [None, loc1_name, loc2_name]
+            self.longitudes += [None, loc1_x, loc2_x]
+            self.latitudes += [None, loc1_y, loc2_y]
 
         # Initialize Dash app
         self.app = dash.Dash(__name__)
@@ -85,11 +101,14 @@ class CityMapDashboard:
             Input('map-graph', 'id')  # dummy input to trigger initial render
         )
         def update_map(_):
+            # b_lo, b_la = 52.5200, 13.4050
+            # h_lo, h_la = 53.5511, 9.9937
+
             fig = go.Figure(go.Scattermap(
-                mode='markers+text',
-                lon=self.longitudes,
-                lat=self.latitudes,
-                text=self.locations,
+                mode='lines+markers+text',
+                lon=self.longitudes,  # + (None, b_la, h_la)
+                lat=self.latitudes,  # + (None, b_lo, h_lo)
+                text=self.locations,  # + (None, "Berlin", "Hamburg"),
                 marker=dict(size=20, color='blue'),
                 textposition='top center'
             ))
@@ -190,7 +209,6 @@ class CityMapDashboard:
                                                              selected_carrier)  # [(loc_name, tech_name, carrier),]
             tech_names = sorted({x[1] for x in loc_techs})
 
-
             # Consistent card style
             card_style = {
                 "border": "1px solid #ccc",
@@ -206,7 +224,7 @@ class CityMapDashboard:
                 fig.update_layout(
                     title=title,
                     xaxis_title="Time step",
-                    yaxis_title="Energy (MWh)",
+                    yaxis_title="Energy (kWh)",
                     hovermode="x unified",
                     showlegend=False,
                     margin=dict(t=40, r=10, b=20, l=40),
@@ -227,7 +245,7 @@ class CityMapDashboard:
                     x=np.arange(len(total_demand)),
                     name="Demand",
                     line=dict(width=2),
-                    hovertemplate="%{y:.2f} MWh<extra>%{x}</extra>"
+                    hovertemplate="%{y:.2f} kWh<extra>%{x}</extra>"
                 ))
                 fig_d = apply_layout(fig_d, f"Demand — {city_name} ({selected_carrier})")
 
@@ -289,7 +307,6 @@ class CityMapDashboard:
                         tech_children.append(
                             html.Li(f"Resource Efficiency: {value * 100}%")
                         )
-
 
                 details = html.Ul(children=tech_children)
 
@@ -361,7 +378,7 @@ class CityMapDashboard:
 # ---------------
 if __name__ == '__main__':
     # Specify the path to the pickle file
-    pickle_file_path = '../german_model_inputs.pkl'
+    pickle_file_path = '../german_model_inputs_with_transmissions.pkl'
 
     # Open the file in read-binary mode and load the inputs
     with open(pickle_file_path, 'rb') as f:
