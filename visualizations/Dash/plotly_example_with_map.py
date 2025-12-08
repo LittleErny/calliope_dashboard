@@ -1,63 +1,170 @@
 import math
-
 import dash
 import numpy as np
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
-from fontTools.feaLib import location
+import dash_leaflet as dl
 
 from Calliope_learning.visualizations.inputs_helper import InputsHelper
 import pickle
 
 
 class CityMapDashboard:
-    """
-    Split the single combined time series into multiple graphs:
-      - One graph for Demand
-      - One graph per technology (e.g., PV, WIND, etc.)
-    All graphs appear stacked in the scrollable right panel, each inside its own card.
-    """
+    # -----------------------------
+    # Arrowhead scaling parameters
+    # -----------------------------
+    R_EARTH = 6371000.0  # meters
+    ZOOM_REF = 6         # reference zoom level for arrowhead size
+    L_REF_M = 25000      # length at ZOOM_REF (meters)
+    W_REF_M = 18000      # width  at ZOOM_REF (meters)
+    L_MIN_M, L_MAX_M = 4000, 80000
+    W_MIN_M, W_MAX_M = 3000, 60000
 
     def __init__(self, input_helper: InputsHelper):
         self.input_helper = input_helper
-        loc_coords = input_helper.get_loc_coords()
 
-        # Insert some (None, None, None) so that the lines btw cities are not drown automatically
-        for i in range(len(loc_coords) - 1, 0, -1):
-            loc_coords.insert(i, (None, None, None))
+        raw_coords = self.input_helper.get_loc_coords()  # [(name, lon, lat), ...]
+        self.locations, self.longitudes, self.latitudes = [list(x) for x in zip(*raw_coords)]
 
-        # First import just cities
-        self.locations, self.longitudes, self.latitudes = [list(x) for x in zip(*loc_coords)]
+        self.cities = {name: [lat, lon] for name, lon, lat in raw_coords}
 
-        # Then import transmission info
-        lines = self.input_helper.get_transmission_lines()
+
+        lines = self.input_helper.get_transmission_lines()  # [((name1, lon1, lat1), (name2, lon2, lat2)), ..]
+        self.connections = []
         for line in lines:
             loc1, loc2 = line
-            loc1_name, loc1_x, loc1_y = loc1
-            loc2_name, loc2_x, loc2_y = loc2
-            self.locations += [None, loc1_name, loc2_name]
-            self.longitudes += [None, loc1_x, loc2_x]
-            self.latitudes += [None, loc1_y, loc2_y]
+            a_name, a_lon, a_lat = loc1
+            b_name, b_lon, b_lat = loc2
+            # Enforce existence in cities; InputsHelper is assumed consistent
+            if a_name not in self.cities:
+                self.cities[a_name] = [a_lat, a_lon]
+            if b_name not in self.cities:
+                self.cities[b_name] = [b_lat, b_lon]
+            self.connections.append((a_name, b_name))
 
-        # Initialize Dash app
-        self.app = dash.Dash(__name__)
+        # ---- Prebuild Leaflet components (markers, polylines, empty arrowheads) ----
+        self.marker_components = [
+            dl.Marker(
+                id=f"marker-{city}",
+                position=coords,
+                children=[dl.Tooltip(city), dl.Popup([html.B(city)])]
+            )
+            for city, coords in self.cities.items()
+        ]
 
-        # Tell Dash to call a function that returns the layout
+        self.route_lines = [
+            dl.Polyline(
+                id=f"route-{a}-{b}",
+                positions=[self.cities[a], self.cities[b]],
+                color="red",
+                weight=4,
+                opacity=0.7,
+                children=[dl.Tooltip(f"{a} → {b}")]
+            )
+            for a, b in self.connections
+        ]
+
+        self.arrowheads = [
+            dl.Polygon(
+                id=f"head-{a}-{b}",
+                positions=[],  # will be filled by zoom callback
+                color="red",
+                fill=True,
+                fillColor="red",
+                fillOpacity=0.7,
+                weight=2,
+            )
+            for a, b in self.connections
+        ]
+
+        # ---- Dash app ----
+        self.app = dash.Dash(__name__, suppress_callback_exceptions=True)
         self.app.layout = self.layout
 
-        # Register callbacks
+        # ---- Register callbacks ----
         self.register_callbacks()
+
+    # -----------------------------
+    # Geo helpers for arrowheads
+    # -----------------------------
+    @staticmethod
+    def _deg2rad(x):
+        return math.radians(x)
+
+    @staticmethod
+    def _rad2deg(x):
+        return math.degrees(x)
+
+    def destination_point(self, lat_deg, lon_deg, distance_m, bearing_deg):
+        """Return [lat, lon] from (lat_deg, lon_deg) by distance_m at bearing_deg."""
+        lat1 = self._deg2rad(lat_deg)
+        lon1 = self._deg2rad(lon_deg)
+        brng = self._deg2rad(bearing_deg)
+        dr = distance_m / self.R_EARTH
+
+        lat2 = math.asin(math.sin(lat1) * math.cos(dr) +
+                         math.cos(lat1) * math.sin(dr) * math.cos(brng))
+        lon2 = lon1 + math.atan2(math.sin(brng) * math.sin(dr) * math.cos(lat1),
+                                 math.cos(dr) - math.sin(lat1) * math.sin(lat2))
+        # Normalize longitude to [-180, 180)
+        return [self._rad2deg(lat2), (self._rad2deg(lon2) + 540) % 360 - 180]
+
+    def initial_bearing_deg(self, a_name, b_name):
+        """Initial bearing (deg) from city A to B in [0..360)."""
+        lat1, lon1 = map(self._deg2rad, self.cities[a_name])
+        lat2, lon2 = map(self._deg2rad, self.cities[b_name])
+        dlon = lon2 - lon1
+        y = math.sin(dlon) * math.cos(lat2)
+        x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+        brng = self._rad2deg(math.atan2(y, x))
+        return (brng + 360) % 360
+
+    def arrowhead_triangle_at_b(self, a_name, b_name, length_m, width_m):
+        """
+        Build a small triangular arrowhead at destination B, pointing A -> B.
+        Returns [tip(B), base_left, base_right] as [lat, lon] lists.
+        """
+        tip = self.cities[b_name]
+        dir_ab = self.initial_bearing_deg(a_name, b_name)
+        base_center = self.destination_point(tip[0], tip[1], length_m, (dir_ab + 180) % 360)
+        left_bearing = (dir_ab + 90) % 360
+        right_bearing = (dir_ab + 270) % 360
+        base_left = self.destination_point(base_center[0], base_center[1], width_m / 2.0, left_bearing)
+        base_right = self.destination_point(base_center[0], base_center[1], width_m / 2.0, right_bearing)
+        return [tip, base_left, base_right]
+
+    def head_sizes_for_zoom(self, zoom):
+        """
+        Choose length/width in meters so screen size stays roughly constant.
+        Leaflet zoom steps ~factor 2; zoom up => fewer meters for same on-screen size.
+        """
+        z = zoom if zoom is not None else self.ZOOM_REF
+        factor = 2 ** (self.ZOOM_REF - z)  # zoom up => factor down
+        L = max(self.L_MIN_M, min(self.L_MAX_M, self.L_REF_M * factor))
+        W = max(self.W_MIN_M, min(self.W_MAX_M, self.W_REF_M * factor))
+        return L, W
 
     # -----------------------------
     # Layout
     # -----------------------------
     def layout(self):
         return html.Div(style={'display': 'flex', 'height': '100vh'}, children=[
-            # Left: map
+            # Left: Leaflet map
             html.Div(style={'flex': '2', 'padding': '10px'}, children=[
                 html.H1("German Cities Map"),
-                dcc.Graph(id='map-graph', style={'height': '600px'})
+                # Selected city store to share across callbacks
+                dcc.Store(id="selected-city", data=None),
+                dl.Map(
+                    id="map",
+                    center=[51.17, 10.45],  # approx center of Germany; ToDo: calculate it automatically
+                    zoom=6,
+                    style={"width": "100%", "height": "600px"},
+                    children=[
+                        dl.TileLayer(),
+                        dl.LayerGroup(id="map-layer")  # will be populated by initial callback
+                    ]
+                ),
             ]),
 
             # Right: info panel
@@ -72,7 +179,6 @@ class CityMapDashboard:
             }, children=[
                 html.H3("Location Info"),
                 html.P("Click a city to see details here."),
-
                 # Keep dropdown ID always present; hidden until a city is selected
                 dcc.Dropdown(
                     id="carrier-dropdown",
@@ -81,7 +187,6 @@ class CityMapDashboard:
                     clearable=False,
                     style={"display": "none"}
                 ),
-
                 # Scrollable area with per-tech cards (each includes its own graph)
                 html.Div(id="techs-list", style={
                     "marginTop": "20px",
@@ -95,101 +200,106 @@ class CityMapDashboard:
     # Callbacks
     # -----------------------------
     def register_callbacks(self):
-        # Map update (initial render)
-        @self.app.callback(
-            Output('map-graph', 'figure'),
-            Input('map-graph', 'id')  # dummy input to trigger initial render
+        app = self.app  # alias
+
+        # --- Initial map population: add markers, lines, and empty arrowheads ---
+        @app.callback(
+            Output('map-layer', 'children'),
+            Input('map', 'id')  # dummy input to trigger initial render
         )
         def update_map(_):
-            # b_lo, b_la = 52.5200, 13.4050
-            # h_lo, h_la = 53.5511, 9.9937
+            return self.marker_components + self.route_lines + self.arrowheads
 
-            fig = go.Figure(go.Scattermap(
-                mode='lines+markers+text',
-                lon=self.longitudes,  # + (None, b_la, h_la)
-                lat=self.latitudes,  # + (None, b_lo, h_lo)
-                text=self.locations,  # + (None, "Berlin", "Hamburg"),
-                marker=dict(size=20, color='blue'),
-                textposition='top center'
-            ))
+        # --- Recompute arrowheads on zoom ---
+        head_outputs = [Output(f"head-{a}-{b}", "positions") for a, b in self.connections]
 
-            fig.update_layout(
-                title="German Cities",
-                map=dict(
-                    bearing=0,
-                    center=dict(  # approximately the center of Germany
-                        lat=51.17,
-                        lon=10.45
-                    ),
-                    pitch=0,
-                    zoom=5.2
-                ),
-                mapbox_style='open-street-map',
-                margin={"r": 0, "t": 50, "l": 0, "b": 0},  # small margin from above for the map title
-                autosize=True
-            )
-            return fig
+        @app.callback(head_outputs, Input("map", "zoom"))
+        def scale_arrowheads(zoom):
+            L, W = self.head_sizes_for_zoom(zoom)
+            positions_list = []
+            for a, b in self.connections:
+                tri = self.arrowhead_triangle_at_b(a, b, length_m=L, width_m=W)
+                positions_list.append(tri)
+            return positions_list
 
-        # Info panel update
-        @self.app.callback(
-            Output('info-panel', 'children'),
-            Input('map-graph', 'clickData')
+        # Build Inputs for clicks on markers, routes, and arrowheads
+        marker_inputs = [Input(f"marker-{c}", "n_clicks") for c in self.cities.keys()]
+        route_inputs = [Input(f"route-{a}-{b}", "n_clicks") for a, b in self.connections]
+        head_inputs = [Input(f"head-{a}-{b}", "n_clicks") for a, b in self.connections]
+
+        # --- Info panel update + remember selected city in Store ---
+        @app.callback(
+            [Output('info-panel', 'children'), Output('selected-city', 'data')],
+            marker_inputs + route_inputs + head_inputs
         )
-        def display_info(clickData):
-            # Whenever we select some location on the map, this function is triggered
+        def display_info(*_):
+            ctx = dash.callback_context
+            # Default (nothing clicked yet)
+            default_panel = [
+                html.H3("Location Info"),
+                html.P("Click a city to see details here."),
+                dcc.Dropdown(
+                    id="carrier-dropdown",
+                    options=[],
+                    value=None,
+                    clearable=False,
+                    style={"display": "none"}
+                ),
+                html.Div(id="techs-list", style={
+                    "marginTop": "20px",
+                    "overflowY": "auto",
+                    "flex": "1"
+                })
+            ]
 
-            if clickData:
-                city_name = clickData['points'][0]['text']
+            print(ctx.triggered)
+            if not ctx.triggered or ctx.triggered[0]['value'] is None:
+                return default_panel, None
+
+            trig_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+            # We only open the detailed info when a city marker is clicked.
+            if trig_id.startswith("marker-"):
+                city_name = trig_id.replace("marker-", "")
                 area = self.input_helper.get_location_area(city_name)
                 carriers = self.input_helper.get_location_carriers(city_name)
                 assert len(carriers) > 0
-                return [
-                    html.H3(f"{city_name}, Germany"),
-                    html.P(f"Location area: {area}"),
-                    html.Label("Carrier type:"),
-                    # visible dropdown when a city is selected
-                    dcc.Dropdown(
-                        id="carrier-dropdown",
-                        options=[{"label": c, "value": c} for c in carriers],
-                        value=carriers[0],
-                        clearable=False,
-                    ),
-                    html.Div(id="techs-list", style={
-                        "marginTop": "20px",
-                        "overflowY": "auto",
-                        "flex": "1"
-                    })
-                ]
-            else:
-                # ensure the dropdown id always exists in the layout (hidden / empty)
-                return [
-                    html.H3("Location Info"),
-                    html.P("Click a city to see details here."),
-                    dcc.Dropdown(
-                        id="carrier-dropdown",
-                        options=[],  # no options when nothing is selected
-                        value=None,
-                        clearable=False,
-                        style={"display": "none"}  # keep it invisible until a city is clicked
-                    ),
-                    html.Div(id="techs-list", style={
-                        "marginTop": "20px",
-                        "overflowY": "auto",
-                        "flex": "1"
-                    })
-                ]
 
-        # Build the list of per-tech cards + a separate Demand chart in the beginning
-        @self.app.callback(
+                return (
+                    [
+                        html.H3(f"{city_name}, Germany"),
+                        html.P(f"Location area: {area}"),
+                        html.Label("Carrier type:"),
+                        dcc.Dropdown(
+                            id="carrier-dropdown",
+                            options=[{"label": c, "value": c} for c in carriers],
+                            value=carriers[0],
+                            clearable=False,
+                        ),
+                        html.Div(id="techs-list", style={
+                            "marginTop": "20px",
+                            "overflowY": "auto",
+                            "flex": "1"
+                        })
+                    ],
+                    city_name  # store selected city for the charts callback
+                )
+
+            # If a route/arrow is clicked, keep default panel (no city context)
+            return default_panel, None
+
+        # --- Build the list of per-tech cards + separate Demand chart ---
+        @app.callback(
             Output("techs-list", "children"),
             Input("carrier-dropdown", "value"),
-            Input("map-graph", "clickData")
+            Input("selected-city", "data")
         )
-        def update_techs_list(selected_carrier, clickData):
-            if not clickData or not selected_carrier:
+        def update_techs_list(selected_carrier, selected_city):
+            # print("Callback: ", selected_carrier, selected_city)
+            if not selected_city or not selected_carrier:
                 return []
 
-            city_name = clickData['points'][0]['text']
+            city_name = selected_city
 
             # ---------------- Demand ----------------
             demand_arrays = [
@@ -205,8 +315,7 @@ class CityMapDashboard:
             supply_dict = self.input_helper.get_location_total_max_supply(city_name, selected_carrier)
 
             # Discover technologies present at this location for the carrier
-            loc_techs = self.input_helper.get_location_techs(city_name,
-                                                             selected_carrier)  # [(loc_name, tech_name, carrier),]
+            loc_techs = self.input_helper.get_location_techs(city_name, selected_carrier)  # [(loc_name, tech_name, carrier),]
             tech_names = sorted({x[1] for x in loc_techs})
 
             # Consistent card style
@@ -235,11 +344,9 @@ class CityMapDashboard:
 
             children = []
 
-            # First always goes demand.
             # Demand card (if available)
             if total_demand is not None:
                 fig_d = go.Figure()
-
                 fig_d.add_trace(go.Scatter(
                     y=total_demand,
                     x=np.arange(len(total_demand)),
@@ -256,12 +363,10 @@ class CityMapDashboard:
                     ])
                 )
 
-            # Second go all the supply techs
-            # One card per technology
+            # Supply techs (one card per technology)
             for tech in tech_names:
                 arr = supply_dict.get(f"{city_name}::{tech}")
                 if arr is None:
-                    # Skip technologies not present in the aggregated supply
                     continue
 
                 fig_s = go.Figure()
@@ -274,39 +379,25 @@ class CityMapDashboard:
                 ))
                 fig_s = apply_layout(fig_s, f"{tech} — {city_name} ({selected_carrier})")
 
-                # Simple static details
-                details = self.input_helper.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
+                # Static details
+                details_map = self.input_helper.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
                 tech_children = []
 
-                for key, value in details.items():
+                for key, value in details_map.items():
                     if key == "lifetime" and not math.isnan(value):
-                        tech_children.append(
-                            html.Li(f"Lifetime: {value} years")
-                        )
+                        tech_children.append(html.Li(f"Lifetime: {value} years"))
                     if key == "energy_cap_max" and not math.isnan(value):
-                        tech_children.append(
-                            html.Li(f"Maximum Energy Capacity: {value} kW")
-                        )
+                        tech_children.append(html.Li(f"Maximum Energy Capacity: {value} kW"))
                     if key == "energy_con" and not math.isnan(value):
-                        tech_children.append(
-                            html.Li(f"Energy Consumption: {value} kW")
-                        )
+                        tech_children.append(html.Li(f"Energy Consumption: {value} kW"))
                     if key == "energy_eff" and not math.isnan(value):
-                        tech_children.append(
-                            html.Li(f"Energy Efficiency: {value * 100}%")
-                        )
+                        tech_children.append(html.Li(f"Energy Efficiency: {value * 100}%"))
                     if key == "parasitic_eff" and not math.isnan(value):
-                        tech_children.append(
-                            html.Li(f"Parasitic Efficiency: {value * 100}%")
-                        )
+                        tech_children.append(html.Li(f"Parasitic Efficiency: {value * 100}%"))
                     if key == "resource_area_max" and not math.isnan(value):
-                        tech_children.append(
-                            html.Li(f"Maximum Resource Area: {value} m²")
-                        )
+                        tech_children.append(html.Li(f"Maximum Resource Area: {value} m²"))
                     if key == "resource_eff" and not math.isnan(value):
-                        tech_children.append(
-                            html.Li(f"Resource Efficiency: {value * 100}%")
-                        )
+                        tech_children.append(html.Li(f"Resource Efficiency: {value * 100}%"))
 
                 details = html.Ul(children=tech_children)
 
@@ -318,46 +409,29 @@ class CityMapDashboard:
                     ])
                 )
 
-            # Lastly storage techs go
+            # Storage techs (details only)
             for tech in tech_names:
                 if self.input_helper.tech_is_storage(tech):
-                    details = self.input_helper.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
+                    details_map = self.input_helper.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
                     tech_children = []
 
-                    for key, value in details.items():
+                    for key, value in details_map.items():
                         if key == "lifetime" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Lifetime: {value} years")
-                            )
+                            tech_children.append(html.Li(f"Lifetime: {value} years"))
                         if key == "energy_cap_max" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Maximum Discharge Power: {value} kW")
-                            )
+                            tech_children.append(html.Li(f"Maximum Discharge Power: {value} kW"))
                         if key == "energy_con" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Energy Consumption: {value} kW")
-                            )
+                            tech_children.append(html.Li(f"Energy Consumption: {value} kW"))
                         if key == "energy_eff" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Energy Efficiency: {value * 100}%")
-                            )
+                            tech_children.append(html.Li(f"Energy Efficiency: {value * 100}%"))
                         if key == "parasitic_eff" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Parasitic Efficiency: {value * 100}%")
-                            )
+                            tech_children.append(html.Li(f"Parasitic Efficiency: {value * 100}%"))
                         if key == "resource_area_max" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Maximum Resource Area: {value} m²")
-                            )
+                            tech_children.append(html.Li(f"Maximum Resource Area: {value} m²"))
                         if key == "resource_eff" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Resource Efficiency: {value * 100}%")
-                            )
-
+                            tech_children.append(html.Li(f"Resource Efficiency: {value * 100}%"))
                         if key == "storage_cap_max" and not math.isnan(value):
-                            tech_children.append(
-                                html.Li(f"Max Storage Capacity: {value} kWh")
-                            )
+                            tech_children.append(html.Li(f"Max Storage Capacity: {value} kWh"))
 
                     details = html.Ul(children=tech_children)
                     children.append(

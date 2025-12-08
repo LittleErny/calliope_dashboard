@@ -334,8 +334,9 @@ class InputsHelper:
 
     def tech_is_storage(self, tech_name: str) -> bool:
         return \
-            list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name.split(':')[0])].split('.')[
-                -1] == "storage"
+                list(self.inputs.inheritance.data)[list(self.inputs.techs.data).index(tech_name.split(':')[0])].split(
+                    '.')[
+                    -1] == "storage"
 
     def get_loc_tech_carrier_stats(self, location, tech, carrier):
         # Extract the parent(type) of the current tech
@@ -428,12 +429,13 @@ class InputsHelper:
             raise NotImplementedError
         return details
 
-    def get_transmission_lines(self) -> list[tuple[str, str]]:
-        # First save all defined transmission lines in the form (loc_from, loc_to)
-        # candidates = [(
-        #     transmission.split("::")[0],
-        #     transmission.split("::")[1].split(":")[1],
-        # ) for transmission in list(self.inputs.loc_techs_transmission.data)]
+    def get_transmission_lines(self) -> list[
+        tuple[
+            tuple[str, float, float],
+            tuple[str, float, float]
+        ]
+    ]:
+
         candidates = list(self.inputs.loc_techs_transmission.data)
 
         # After that we have to filter out those which are not able to transmiss because of one_way=True
