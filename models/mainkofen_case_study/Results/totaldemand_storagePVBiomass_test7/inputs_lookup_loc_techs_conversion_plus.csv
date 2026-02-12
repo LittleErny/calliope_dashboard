@@ -1,0 +1,4 @@
+carrier_tiers,locs,techs,lookup_loc_techs_conversion_plus
+in,Mainkofen,biomass,Mainkofen::biomass::biomass
+out,Mainkofen,biomass,Mainkofen::biomass::heat
+out_2,Mainkofen,biomass,Mainkofen::biomass::electricity

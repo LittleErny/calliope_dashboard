@@ -1,0 +1,7 @@
+costs,locs,techs,cost
+monetary,Mainkofen,battery_storage,104083.5
+monetary,Mainkofen,biomass,947611.63
+monetary,Mainkofen,grid_electricity,1200677.8
+monetary,Mainkofen,pv,285995.59
+monetary,Mainkofen,pv_carport,0.0
+monetary,Mainkofen,supply_biomass,254400.0

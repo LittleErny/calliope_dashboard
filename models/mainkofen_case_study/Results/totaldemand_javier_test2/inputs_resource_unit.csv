@@ -1,0 +1,6 @@
+locs,techs,resource_unit
+Mainkofen,demand_electricity,energy
+Mainkofen,heat_demand_orc_only,energy
+Mainkofen,pv,energy
+Mainkofen,pv_carport,energy
+Mainkofen,supply_biomass,energy

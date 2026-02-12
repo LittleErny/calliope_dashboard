@@ -1,0 +1,14 @@
+techs,inheritance
+battery_storage,storage
+biomass,conversion_plus
+demand_electricity,demand
+grid_electricity,supply
+heat_demand_orc_only,demand
+pv_parking_1,supply
+pv_parking_2,supply
+pv_parking_3,supply
+pv_parking_4,supply
+pv_rooftop_1,supply
+pv_rooftop_2,supply
+pv_rooftop_3,supply
+supply_biomass,supply

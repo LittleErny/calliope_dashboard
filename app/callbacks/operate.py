@@ -10,6 +10,7 @@ import dash
 import dash_leaflet as dl
 
 import app_data
+from figures import compute_resample_rule, downsample_series
 
 
 UNMET_GREEN = (46, 204, 113)
@@ -268,6 +269,10 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
     if demand_ts.empty:
         return html.Div()
 
+    max_points = 1200
+    rule = compute_resample_rule(demand_ts.index, max_points)
+    demand_ts = downsample_series(demand_ts, max_points=max_points, how="mean", rule=rule)
+    unmet_ts = downsample_series(unmet_ts, max_points=max_points, how="mean", rule=rule)
     unmet_ts = unmet_ts.reindex(demand_ts.index, fill_value=0.0)
     met_ts = (demand_ts - unmet_ts).clip(lower=0.0)
 
@@ -279,6 +284,7 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
 
     for tech in techs:
         prod_ts = helper.get_location_tech_production_window(location, tech, carrier, start_idx, end_idx)
+        prod_ts = downsample_series(prod_ts, max_points=max_points, how="mean", rule=rule)
         if prod_ts.sum() <= 0:
             continue
         tech_series[tech] = prod_ts
@@ -292,6 +298,7 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
         if not line_ref:
             continue
         import_ts = helper.get_line_flow_window(line_id, carrier, start_idx, end_idx).clip(lower=0.0)
+        import_ts = downsample_series(import_ts, max_points=max_points, how="mean", rule=rule)
         if import_ts.sum() <= 0:
             continue
         label = f"Import from {line_ref.src}"
@@ -433,11 +440,15 @@ def _build_line_timeseries_figure(a: str, b: str, carrier: str, start_idx: int, 
         if ts.abs().sum() > FLOW_EPS:
             series.append((f"{b} → {a}", ts))
 
+    max_points = 1200
+    rule = compute_resample_rule(series[0][1].index, max_points) if series else None
+
     fig = go.Figure()
     for label, ts in series:
+        ts = downsample_series(ts, max_points=max_points, how="mean", rule=rule)
         pct = (ts.values / cap * 100) if cap > 0 else np.zeros(len(ts))
         fig.add_trace(
-            go.Scatter(
+            go.Scattergl(
                 x=ts.index,
                 y=ts.values,
                 mode="lines",
@@ -448,10 +459,17 @@ def _build_line_timeseries_figure(a: str, b: str, carrier: str, start_idx: int, 
         )
 
     if cap > 0:
+        cap_index = series[0][1].index if series else app_data.OPERATE_TIMESTEPS
+        cap_index = downsample_series(
+            pd.Series(np.zeros(len(cap_index)), index=cap_index),
+            max_points=max_points,
+            how="mean",
+            rule=rule,
+        ).index
         fig.add_trace(
-            go.Scatter(
-                x=series[0][1].index if series else app_data.OPERATE_TIMESTEPS,
-                y=[cap] * (len(series[0][1]) if series else len(app_data.OPERATE_TIMESTEPS)),
+            go.Scattergl(
+                x=cap_index,
+                y=[cap] * len(cap_index),
                 mode="lines",
                 name="Max capacity",
                 line=dict(color="#c0392b", dash="dash"),
@@ -495,6 +513,11 @@ def _build_storage_figure(
     if mode == "flow":
         charge_ts = helper.get_location_tech_consumption_window(location, tech, carrier, start_idx, end_idx).abs()
         discharge_ts = helper.get_location_tech_production_window(location, tech, carrier, start_idx, end_idx).abs()
+        max_points = 1200
+        base_index = charge_ts.index if not charge_ts.empty else discharge_ts.index
+        rule = compute_resample_rule(base_index, max_points) if len(base_index) else None
+        charge_ts = downsample_series(charge_ts, max_points=max_points, how="mean", rule=rule)
+        discharge_ts = downsample_series(discharge_ts, max_points=max_points, how="mean", rule=rule)
 
         fig = go.Figure()
         if not charge_ts.empty:
@@ -536,10 +559,13 @@ def _build_storage_figure(
         return fig
 
     # Default: SOC
+    max_points = 1200
+    rule = compute_resample_rule(soc_ts.index, max_points) if not soc_ts.empty else None
+    soc_ts = downsample_series(soc_ts, max_points=max_points, how="mean", rule=rule)
     pct = (soc_ts / storage_cap * 100) if storage_cap > 0 else np.zeros(len(soc_ts))
     fig = go.Figure()
     fig.add_trace(
-        go.Scatter(
+        go.Scattergl(
             x=soc_ts.index,
             y=soc_ts.values,
             mode="lines",

@@ -1,0 +1,11 @@
+overrides:
+  operate_override:
+    run:
+      mode: operate
+      operation:
+        window: 336
+        horizon: 336
+
+scenarios:
+  operate_fixed:
+  - operate_override

@@ -1,0 +1,128 @@
+techs:
+  # --- DEMAND TECHS ---
+  demand_electricity:
+    essentials:
+      name: "Electricity demand"
+      color: "#fc0b03"
+      parent: demand
+      carrier: electricity
+
+  heat_demand_orc_only:
+    essentials:
+      name: "ORC Heat demand"
+      color: "#fc0b03"
+      parent: demand
+      carrier: heat
+
+
+  # --- SUPPLY / CONVERSION ---
+  grid_electricity:
+    essentials:
+      name: "Grid import"
+      parent: supply
+      carrier: electricity
+    constraints:
+      resource: inf
+      #energy_cap_max: 1000   # kW peak allowed
+    costs:
+      monetary:
+        om_prod: 0.28   # €/kWh_e
+
+  biomass:
+    essentials:
+      name: "Biomass power plant"
+      color: "#D800FF"
+      parent: conversion_plus
+      carrier_in: biomass
+      carrier_out: heat
+      carrier_out_2: electricity
+      primary_carrier_out: heat
+    constraints:
+      energy_eff: file=biomass_avail_seasonal.csv  #0.80
+      carrier_ratios:
+        carrier_out_2:
+          electricity: 0.225     # 0.18 / 0.80
+      lifetime: 30
+      energy_cap_equals: 2000    # heat_cap = 450 / 0.225 ≈ 2000 kW_th, so that electricity ≈ 450 kW
+    costs:
+      monetary:
+        interest_rate: 0.10
+        energy_cap: 3758          # CAPEX per kW_th
+        om_annual: 75.16          # per kW_th-year
+        #om_prod: 0.0              # variable O&M per kWh_out (set if needed)
+
+  supply_biomass:
+    essentials:
+      parent: supply
+      carrier: biomass
+    constraints: # Total wood chips consumed = 5,318.68 tons 
+      resource: 23934060 # Total Annual Energy = 5,318.68 tons * 4500 kWh/ton = 23,934,060 kWh/year Or 23,934.06 MWh/year
+      
+    costs:
+      monetary:
+        om_con: 0.02              # €/kWh_fuel
+
+  # --- PV techs ---
+  pv: ## rooftop pv
+    essentials:
+      name: "PV Rooftop "
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=calliope_pv_resource.csv # based on tilt/azimuth for the roof & irradiance
+      resource_unit: energy_per_cap
+      #energy_eff: 0.2
+      lifetime: 25
+      export_carrier: electricity
+      #energy_cap_equals: 224            # kWdc installed here
+    costs:
+      monetary:
+        #om_prod: 0.0  # €/kWh_fuel         # zero marginal cost (capex ignored in this simple run)
+        energy_cap: 950      # €/kW  (set your number)
+        om_annual: 21.5      # €/kW/yr
+        interest_rate: 0.05
+        export: -0.05   # or a scalar like -0.08  (€/kWh)
+
+  pv_carport: ## parking pv
+    essentials:
+      name: "PV Parking Canopy"
+      parent: supply
+      carrier: electricity
+    constraints:
+      resource: file=calliope_pv_resource.csv # based on tilt/azimuth for the roof & irradiance
+      resource_unit: energy_per_cap
+      #energy_eff: 0.2
+      lifetime: 25
+      export_carrier: electricity
+    costs:
+      monetary:
+        energy_cap: 1_100    # €/kW  typically higher than rooftop
+        om_annual: 20        # €/kW/yr 
+        interest_rate: 0.05
+        export: -0.05           # or a scalar like -0.08  (€/kWh)
+        
+
+  # # --- STORAGE ---
+  battery_storage:
+    essentials:
+      name: "Battery (Li-ion)"
+      parent: storage
+      carrier: electricity
+    constraints:
+      energy_eff: 0.949
+      lifetime: 15 
+      # Standing loss per hour (fraction of SOC)
+      storage_loss: 0.0002         # 0.02% per hour
+      # Initial SOC as a fraction of storage_cap (0..1) in 0.6.x
+      #storage_initial: 0.5
+      # Optional: fix C-rate instead of explicit caps
+      # energy_cap_per_storage_cap_equals: 0.25   # 0.25 kW per kWh ⇒ 0.25C
+    # Remove om_con — not valid for storage in 0.6.x
+    costs:
+      monetary: 
+        interest_rate: 0.06
+        #energy_cap: 130          # €/kW (PCS/BoP)
+        storage_cap: 450         # €/kWh (Germany 2024–25 utility-scale mid)
+        om_annual: 40            # €/kW·yr  (e.g., 10 €/kWh·yr × 4h)
+        om_prod: 0.003           # €/kWh cycled

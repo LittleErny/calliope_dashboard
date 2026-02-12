@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 from dash import Input, Output, State
 
 import app_data
-from figures import empty_figure, format_number, kpi_tile
+from figures import downsample_grouped_frame, downsample_series, empty_figure, format_number, kpi_tile
 
 OTHER_TECH_COLOR = "#b3b3b3"
 
@@ -234,6 +234,14 @@ def register_planning_callbacks(app):
         if co2_series.empty:
             co2_ts_fig = empty_figure("No CO2 data for the current selection.")
         else:
+            co2_series = downsample_grouped_frame(
+                co2_series,
+                time_col="timestamp",
+                value_col="co2_kg",
+                group_col="group_label",
+                max_points=1200,
+                how="mean",
+            )
             co2_ts_fig = go.Figure()
             for label in co2_series["group_label"].unique():
                 sub = co2_series[co2_series["group_label"] == label]
@@ -241,13 +249,13 @@ def register_planning_callbacks(app):
                 trace_kwargs = dict(x=sub["timestamp"], y=sub["co2_kg"], mode="lines", name=label)
                 if line_color:
                     trace_kwargs["line"] = dict(color=line_color)
-                co2_ts_fig.add_trace(go.Scatter(**trace_kwargs))
+                co2_ts_fig.add_trace(go.Scattergl(**trace_kwargs))
             co2_ts_fig.update_layout(
                 title="CO2 over time",
                 height=260,
                 margin=dict(l=10, r=10, t=45, b=30),
                 xaxis_title="Time",
-                yaxis_title="kg",
+                yaxis=dict(title="kg", rangemode="tozero"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
 
@@ -263,6 +271,14 @@ def register_planning_callbacks(app):
         if prod_series.empty:
             prod_fig = empty_figure("No data for the current selection.")
         else:
+            prod_series = downsample_grouped_frame(
+                prod_series,
+                time_col="timestamp",
+                value_col="energy_kwh",
+                group_col="group_label",
+                max_points=1200,
+                how="mean",
+            )
             prod_fig = go.Figure()
             for label in prod_series["group_label"].unique():
                 sub = prod_series[prod_series["group_label"] == label]
@@ -270,7 +286,7 @@ def register_planning_callbacks(app):
                 trace_kwargs = dict(x=sub["timestamp"], y=sub["energy_kwh"], mode="lines", name=label)
                 if line_color:
                     trace_kwargs["line"] = dict(color=line_color)
-                prod_fig.add_trace(go.Scatter(**trace_kwargs))
+                prod_fig.add_trace(go.Scattergl(**trace_kwargs))
             demand_series = app_data.RESULTS_HELPER.get_plan_demand_timeseries(
                 scenario_id=scenario_key,
                 carrier=carrier_key,
@@ -281,8 +297,17 @@ def register_planning_callbacks(app):
                 selected_tech=selected_tech,
             )
             if not demand_series.empty:
+                demand_series = (
+                    downsample_series(
+                        demand_series.set_index("timestamp")["demand_kwh"].sort_index(),
+                        max_points=1200,
+                        how="mean",
+                    )
+                    .reset_index()
+                    .rename(columns={"demand_kwh": "demand_kwh"})
+                )
                 prod_fig.add_trace(
-                    go.Scatter(
+                    go.Scattergl(
                         x=demand_series["timestamp"],
                         y=demand_series["demand_kwh"],
                         mode="lines",
@@ -296,7 +321,7 @@ def register_planning_callbacks(app):
                 height=340,
                 margin=dict(l=10, r=10, t=45, b=30),
                 xaxis_title="Time",
-                yaxis_title="kWh",
+                yaxis=dict(title="kWh", rangemode="tozero"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
 

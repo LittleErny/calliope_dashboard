@@ -1,0 +1,193 @@
+techs:
+  # --- DEMAND TECHS ---
+  demand_electricity:
+    essentials:
+      name: "Electricity demand"
+      color: "#fc0b03"
+      parent: demand
+      carrier: electricity
+
+  heat_demand_orc_only:
+    essentials:
+      name: "ORC Heat demand"
+      color: "#fc0b03"
+      parent: demand
+      carrier: heat
+
+
+  # --- SUPPLY / CONVERSION ---
+  grid_electricity:
+    essentials:
+      name: "Grid import"
+      parent: supply
+      carrier: electricity
+    constraints:
+      resource: inf
+      #energy_cap_max: 1000   # kW peak allowed
+    costs:
+      monetary:
+        om_prod: 0.28   # €/kWh_e
+
+  biomass:
+    essentials:
+      name: "Biomass power plant"
+      color: "#D800FF"
+      parent: conversion_plus
+      carrier_in: biomass
+      carrier_out: heat
+      carrier_out_2: electricity
+      primary_carrier_out: heat
+    constraints:
+      energy_eff: file=biomass_avail_seasonal.csv  #0.80
+      carrier_ratios:
+        carrier_out_2:
+          electricity: 0.225     # 0.18 / 0.80
+      lifetime: 30
+    costs:
+      monetary:
+        #interest_rate: 0.10
+        #energy_cap: 3758          # CAPEX per kW_th
+        #om_annual: 75.16          # per kW_th-year
+        om_prod: 0.0              # variable O&M per kWh_out (set if needed)
+
+
+  supply_biomass:
+    essentials:
+      parent: supply
+      carrier: biomass
+    constraints: # Total wood chips consumed = 5,318.68 tons 
+      resource: 23934060 # Total Annual Energy = 5,318.68 tons * 4500 kWh/ton = 23,934,060 kWh/year Or 23,934.06 MWh/year
+      # **CRITICAL FIX:** This tells Calliope the resource is an annual total (energy_per_year).
+    costs:
+      monetary:
+        om_con: 0.02              # €/kWh_fuel
+
+ 
+  # --- pv_parkings ---
+  pv_parking_1:
+    essentials:
+      name: "PV (parking)"
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=pv_ac_kw_hourly_2023.csv
+      resource_unit: energy_per_cap
+      energy_cap_equals: 224            # kWdc installed here
+    costs:
+      monetary:
+        om_prod: 0.0           # zero marginal cost (capex ignored in this simple run)
+
+  pv_parking_2:
+    essentials:
+      name: "PV (parking)"
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=pv_ac_kw_hourly_2023.csv
+      resource_unit: energy_per_cap
+      energy_cap_equals: 49.4   # kW installed PV (quick, fixed-capacity scenario)
+    costs:
+      monetary:
+        om_prod: 0.0           # zero marginal cost (capex ignored in this simple run)
+  
+  pv_parking_3:
+    essentials:
+      name: "PV (parking)"
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=pv_ac_kw_hourly_2023.csv
+      resource_unit: energy_per_cap
+      energy_cap_equals: 544  # kW installed PV (quick, fixed-capacity scenario)
+    costs:
+      monetary:
+        om_prod: 0.0           # zero marginal cost (capex ignored in this simple run)
+
+  pv_parking_4:
+    essentials:
+      name: "PV (parking)"
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=pv_ac_kw_hourly_2023.csv
+      resource_unit: energy_per_cap
+      energy_cap_equals: 644  # kW installed PV (quick, fixed-capacity scenario)
+    costs:
+      monetary:
+        om_prod: 0.0           # zero marginal cost (capex ignored in this simple run)
+
+# --- pv_rooftops ---
+  pv_rooftop_1:
+    essentials:
+      name: "PV (rooftop)"
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=pv_ac_kw_hourly_2023.csv
+      resource_unit: energy_per_cap
+      energy_cap_equals: 221   # kW installed PV (quick, fixed-capacity scenario)
+    costs:
+      monetary:
+        om_prod: 0.0           # zero marginal cost (capex ignored in this simple run)
+
+  pv_rooftop_2:
+    essentials:
+      name: "PV (rooftop)"
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=pv_ac_kw_hourly_2023.csv
+      resource_unit: energy_per_cap
+      energy_cap_equals: 121   # kW installed PV (quick, fixed-capacity scenario)
+    costs:
+      monetary:
+        om_prod: 0.0           # zero marginal cost (capex ignored in this simple run)
+  
+  pv_rooftop_3:
+    essentials:
+      name: "PV (rooftop)"
+      parent: supply
+      carrier: electricity
+    constraints:
+      # A normalized profile (0..1) that scales output by energy_cap
+      resource: file=pv_ac_kw_hourly_2023.csv
+      resource_unit: energy_per_cap
+      energy_cap_equals: 128   # kW installed PV (quick, fixed-capacity scenario)
+    costs:
+      monetary:
+        om_prod: 0.0           # zero marginal cost (capex ignored in this simple run)
+
+
+  # # --- STORAGE ---
+  battery_storage:
+    essentials:
+      name: "Battery (Li-ion)"
+      parent: storage
+      carrier: electricity
+    constraints:
+      # Power (kW): charge/discharge limit (inverter size)
+      energy_cap_max: 500
+      # Energy (kWh): usable capacity
+      storage_cap_max: 2000
+      # Round-trip ~ (energy_eff)^2  ⇒ 0.949^2 ≈ 0.90
+      energy_eff: 0.81 #949
+      lifetime: 20  # {Brown et al. , Energy, 2018}
+      # Standing loss per hour (fraction of SOC)
+      storage_loss: 0.001
+      # Initial SOC as a fraction of storage_cap (0..1) in 0.6.x
+      storage_initial: 0.5
+      # Optional: fix C-rate instead of explicit caps
+      # energy_cap_per_storage_cap_equals: 0.25   # 0.25 kW per kWh ⇒ 0.25C
+    # Remove om_con — not valid for storage in 0.6.x
+    costs:
+      monetary: 
+        interest_rate: 0.1
+        storage_cap: 328  # USD/kW Cost optimal combinations of storage technologies for maximizing renewable integration in Indian power system by 2040: Multi-region approach
+        om_annual: 10.278  # USD/kW Cost optimal combinations of storage technologies for maximizing renewable integration in Indian power system by 2040: Multi-region approach
+        om_prod: 0.000153 # USD/kW Cost optimal combinations of storage technologies for maximizing renewable integration in Indian power system by 2040: Multi-region approach

@@ -1,0 +1,6 @@
+techs,names
+biomass,Biomass power plant
+demand_electricity,Electricity demand
+demand_heat,Heat demand
+grid_electricity,Grid import
+supply_biomass,supply_biomass

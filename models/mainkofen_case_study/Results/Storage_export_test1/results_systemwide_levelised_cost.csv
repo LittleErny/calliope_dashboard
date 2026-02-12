@@ -1,0 +1,16 @@
+,costs,techs,systemwide_levelised_cost
+biomass,monetary,battery_storage,inf
+biomass,monetary,biomass,inf
+biomass,monetary,grid_electricity,inf
+biomass,monetary,pv,inf
+biomass,monetary,supply_biomass,0.02
+electricity,monetary,battery_storage,0.20250328376930896
+electricity,monetary,biomass,0.41387649807826693
+electricity,monetary,grid_electricity,0.27999999738616005
+electricity,monetary,pv,0.050278469052425924
+electricity,monetary,supply_biomass,inf
+heat,monetary,battery_storage,inf
+heat,monetary,biomass,0.09312221206761007
+heat,monetary,grid_electricity,inf
+heat,monetary,pv,inf
+heat,monetary,supply_biomass,inf

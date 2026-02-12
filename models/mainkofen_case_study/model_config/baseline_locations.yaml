@@ -1,0 +1,19 @@
+locations:
+  Mainkofen:
+    coordinates: {lat: 48.853, lon: 12.985}  # approx. Deggendorf/Mainkofen
+    techs:
+      # Demands (time series)
+      demand_electricity:
+        constraints:
+          resource: file=gross_electricity_demand.csv
+
+      demand_heat:
+        constraints:
+          resource: file=demand_electricity_2023_neg.csv
+
+      # Supplies / conversion
+      grid_electricity:
+        constraints:
+          energy_cap_max: 1000    # kW grid connection cap (synthetic)
+      biomass:
+      supply_biomass:

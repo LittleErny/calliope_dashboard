@@ -1,0 +1,14 @@
+locs,techs,energy_cap
+Mainkofen,battery_storage,383.11041
+Mainkofen,biomass,2676.0613
+Mainkofen,demand_electricity,1791.3306
+Mainkofen,grid_electricity,5000.0
+Mainkofen,heat_demand_orc_only,2676.0613
+Mainkofen,pv_parking_1,224.0
+Mainkofen,pv_parking_2,49.4
+Mainkofen,pv_parking_3,544.0
+Mainkofen,pv_parking_4,644.0
+Mainkofen,pv_rooftop_1,221.0
+Mainkofen,pv_rooftop_2,121.0
+Mainkofen,pv_rooftop_3,128.0
+Mainkofen,supply_biomass,3345.0767

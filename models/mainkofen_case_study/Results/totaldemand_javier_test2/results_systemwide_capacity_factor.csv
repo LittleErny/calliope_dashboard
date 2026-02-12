@@ -1,0 +1,16 @@
+,techs,systemwide_capacity_factor
+biomass,biomass,0.0
+biomass,grid_electricity,0.0
+biomass,pv,0.0
+biomass,pv_carport,0.0
+biomass,supply_biomass,0.5808219177536272
+electricity,biomass,0.13068493312272414
+electricity,grid_electricity,0.14415091753056555
+electricity,pv,0.20470552395035313
+electricity,pv_carport,0.20647692680226828
+electricity,supply_biomass,0.0
+heat,biomass,0.5808219177570606
+heat,grid_electricity,0.0
+heat,pv,0.0
+heat,pv_carport,0.0
+heat,supply_biomass,0.0

@@ -1,0 +1,4 @@
+costs,locs,techs,cost_depreciation_rate
+monetary,Mainkofen,battery_storage,0.10296276395531265
+monetary,Mainkofen,biomass,0.1060792482526339
+monetary,Mainkofen,pv_carport,0.0709524572992296

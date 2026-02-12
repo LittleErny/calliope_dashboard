@@ -1,0 +1,5 @@
+costs,locs,techs,cost_investment_rhs
+monetary,Mainkofen,battery_storage,102850.11497297243
+monetary,Mainkofen,biomass,947611.6298667964
+monetary,Mainkofen,pv,285995.58813251776
+monetary,Mainkofen,pv_carport,0.0

@@ -1,0 +1,38 @@
+locations:
+  Mainkofen:
+    coordinates: { lat: 48.853, lon: 12.985 }
+    techs:
+      # Demands (explicit column names, all from a single CSV)
+      demand_electricity:
+        constraints:
+          resource: file=gross_electricity_demand.csv
+      
+      demand_heat:
+        constraints:
+          resource: file=demand_electricity_2023_neg.csv
+
+      # Supplies / conversion
+      grid_electricity:
+        constraints:
+          energy_cap_max: 2000   # kW
+
+      biomass:
+        #constraints:
+          #energy_cap_max: 1000   # kW
+      supply_biomass:
+
+      # PV at Mainkofen
+      pv_parking_1:
+      pv_parking_2:
+      pv_parking_3:
+      pv_parking_4:
+
+      pv_rooftop_1:
+      pv_rooftop_2:
+      pv_rooftop_3:
+
+      # --- STORAGE (if you added the tech in techs:) ---
+      battery_storage:
+       # constraints:
+          #energy_cap_max: 500     # kW
+          #storage_cap_max: 2000   # kWh

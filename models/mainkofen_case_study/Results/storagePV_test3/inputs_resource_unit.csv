@@ -1,0 +1,10 @@
+locs,techs,resource_unit
+Mainkofen,demand_electricity,energy
+Mainkofen,pv_parking_1,energy_per_cap
+Mainkofen,pv_parking_2,energy_per_cap
+Mainkofen,pv_parking_3,energy_per_cap
+Mainkofen,pv_parking_4,energy_per_cap
+Mainkofen,pv_rooftop_1,energy_per_cap
+Mainkofen,pv_rooftop_2,energy_per_cap
+Mainkofen,pv_rooftop_3,energy_per_cap
+Mainkofen,pv_rooftop_4,energy_per_cap

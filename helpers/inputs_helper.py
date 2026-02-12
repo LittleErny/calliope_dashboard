@@ -25,6 +25,8 @@ class InputsHelper:
         assert type(inputs) is xarray.Dataset
         assert inputs.calliope_version == "0.6.10"
         self.inputs = inputs
+        self._location_demand_cache: dict[tuple[str, str], list[np.ndarray]] = {}
+        self._location_supply_cache: dict[tuple[str, str], dict[str, np.ndarray]] = {}
 
     def get_locations(self) -> list[str]:
         """
@@ -252,6 +254,11 @@ class InputsHelper:
             If the provided location does not exist in `self.inputs.locs.data`.
         """
 
+        cache_key = (location, carrier)
+        cached = self._location_demand_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         # Locate the indices where the location matches
         matches = np.where(self.inputs.locs.data == location)[0]
 
@@ -274,7 +281,9 @@ class InputsHelper:
                                      range(len(self.inputs.loc_techs_finite_resource.data))))
 
         # Extract timeseries
-        return [self.inputs.resource.data[i] for i in target_indexes]
+        res = [self.inputs.resource.data[i] for i in target_indexes]
+        self._location_demand_cache[cache_key] = res
+        return res
 
     def get_location_total_max_supply(self, location: str, carrier: str) -> dict[str, np.ndarray]:
         """
@@ -317,6 +326,11 @@ class InputsHelper:
         - Raises an AssertionError if the `location` does not exist in `self.inputs.locs.data`.
         """
 
+        cache_key = (location, carrier)
+        cached = self._location_supply_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         # Locate the indices where the location matches
         matches = np.where(self.inputs.locs.data == location)[0]
 
@@ -351,7 +365,9 @@ class InputsHelper:
         infinite_resource_timeseries = {f"{x[0]}::{x[1]}": np.full(n_timesteps, self.inputs.energy_cap_max.data[
             list(self.inputs.loc_techs.data).index(f"{x[0]}::{x[1]}")]) for x in infinite_resource_ltc}
 
-        return finite_resource_timeseries | infinite_resource_timeseries
+        res = finite_resource_timeseries | infinite_resource_timeseries
+        self._location_supply_cache[cache_key] = res
+        return res
 
     def tech_is_storage(self, tech_name: str) -> bool:
         return \
@@ -401,8 +417,63 @@ class InputsHelper:
             details["lifetime"] = self.inputs.lifetime.data[loc_tech_index]
 
 
-        elif tech_type == "supply":
-            raise NotImplementedError
+        elif tech_type in ("supply", "conversion", "conversion_plus", "transmission", "demand"):
+            loc_tech_search_str = f"{location}::{tech}"
+            try:
+                loc_tech_index = list(self.inputs.loc_techs.data).index(loc_tech_search_str)
+            except ValueError:
+                warnings.warn(f"loc_tech '{loc_tech_search_str}' not found in inputs; skipping details.")
+                return {}
+
+            # energy_cap_max
+            if hasattr(self.inputs, "energy_cap_max"):
+                try:
+                    details["energy_cap_max"] = self.inputs.energy_cap_max.data[loc_tech_index]
+                except Exception:
+                    pass
+
+            # energy_con
+            if hasattr(self.inputs, "energy_con"):
+                try:
+                    details["energy_con"] = self.inputs.energy_con.data[loc_tech_index]
+                except Exception:
+                    pass
+
+            # energy_eff
+            if hasattr(self.inputs, "energy_eff"):
+                try:
+                    details["energy_eff"] = self.inputs.energy_eff.data[loc_tech_index]
+                except Exception:
+                    pass
+
+            # resource_eff
+            if hasattr(self.inputs, "resource_eff"):
+                resource_eff_search_str = loc_tech_search_str
+                try:
+                    if resource_eff_search_str in list(self.inputs.resource_eff.data):
+                        resource_eff_index = list(self.inputs.resource_eff.data).index(resource_eff_search_str)
+                        details["resource_eff"] = self.inputs.resource_eff.data[resource_eff_index]
+                except Exception:
+                    pass
+
+            # lifetime
+            if hasattr(self.inputs, "lifetime"):
+                try:
+                    details["lifetime"] = self.inputs.lifetime.data[loc_tech_index]
+                except Exception:
+                    pass
+
+            # resource_area_max
+            if hasattr(self.inputs, "loc_techs_area") and hasattr(self.inputs, "resource_area_max"):
+                resource_area_max_search_str = loc_tech_search_str
+                try:
+                    if resource_area_max_search_str in list(self.inputs.loc_techs_area.data):
+                        resource_area_max_index = list(self.inputs.loc_techs_area.data).index(
+                            resource_area_max_search_str
+                        )
+                        details["resource_area_max"] = self.inputs.resource_area_max.data[resource_area_max_index]
+                except Exception:
+                    pass
 
         elif tech_type == "storage":
             loc_tech_search_str = f"{location}::{tech}"
@@ -440,14 +511,9 @@ class InputsHelper:
 
 
 
-        elif tech_type == "transmission":
-            raise NotImplementedError
-
-        elif tech_type == "conversion":
-            raise NotImplementedError
-
         else:
-            raise NotImplementedError
+            warnings.warn(f"Unsupported tech type '{tech_type}' for {location}::{tech}; returning empty details.")
+            return {}
         return details
 
     def get_transmission_lines(self) -> list[
@@ -457,7 +523,13 @@ class InputsHelper:
         ]
     ]:
 
+        if not hasattr(self.inputs, "loc_techs_transmission"):
+            warnings.warn("No transmission technologies found in inputs.")
+            return []
+
         candidates = list(self.inputs.loc_techs_transmission.data)
+        if not candidates:
+            return []
 
         # After that we have to filter out those which are not able to transmiss because of one_way=True
         try:
@@ -481,9 +553,15 @@ class InputsHelper:
 
         coords_dict = self.get_loc_coords_as_dict()
 
-        res = [((x[0], coords_dict[x[0]][0], coords_dict[x[0]][1]), (x[1], coords_dict[x[1]][0], coords_dict[x[1]][1]))
-               for x in res]
-        return res
+        res_with_coords = []
+        for src, dst in res:
+            if src not in coords_dict or dst not in coords_dict:
+                warnings.warn(f"Missing coordinates for transmission line {src} -> {dst}; skipping.")
+                continue
+            res_with_coords.append(
+                ((src, coords_dict[src][0], coords_dict[src][1]), (dst, coords_dict[dst][0], coords_dict[dst][1]))
+            )
+        return res_with_coords
 
     def get_loc_tech_costs(self, location: str, tech: str) -> dict[str, float]:
         """

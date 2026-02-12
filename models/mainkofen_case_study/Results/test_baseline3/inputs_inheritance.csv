@@ -1,0 +1,6 @@
+techs,inheritance
+biomass,conversion_plus
+demand_electricity,demand
+demand_heat,demand
+grid_electricity,supply
+supply_biomass,supply

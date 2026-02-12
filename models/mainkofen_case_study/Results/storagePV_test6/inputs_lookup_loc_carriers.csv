@@ -1,0 +1,2 @@
+carriers,locs,lookup_loc_carriers
+electricity,Mainkofen,"Mainkofen::pv_rooftop_3::electricity,Mainkofen::demand_electricity::electricity,Mainkofen::pv_rooftop_1::electricity,Mainkofen::grid_electricity::electricity,Mainkofen::pv_rooftop_2::electricity,Mainkofen::pv_rooftop_4::electricity"

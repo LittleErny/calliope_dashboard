@@ -1,0 +1,4 @@
+carriers,locs,lookup_loc_carriers
+biomass,Mainkofen,"Mainkofen::biomass::biomass,Mainkofen::supply_biomass::biomass"
+electricity,Mainkofen,"Mainkofen::biomass::electricity,Mainkofen::grid_electricity::electricity,Mainkofen::demand_electricity::electricity"
+heat,Mainkofen,"Mainkofen::demand_heat::heat,Mainkofen::biomass::heat"

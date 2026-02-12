@@ -33,6 +33,7 @@ class ResultsHelper:
         self._var_cost_df: Optional[pd.DataFrame] = None
         self._emissions_df: Optional[pd.DataFrame] = None
         self._demand_df: Optional[pd.DataFrame] = None
+        self._plan_ts_cache: Dict[Tuple, pd.DataFrame] = {}
 
     def _pick_cost_key(self) -> Optional[str]:
         """Select a default cost dimension key from results (monetary first, else first available)."""
@@ -869,6 +870,19 @@ class ResultsHelper:
     ) -> pd.DataFrame:
         """Return grouped CO2 timeseries (top-N + Other) for the selection."""
         scenario_key = self.normalize_scenario(scenario_id)
+        cache_key = (
+            "co2_ts",
+            scenario_key,
+            start_ts,
+            end_ts,
+            view_mode,
+            selected_location,
+            selected_tech,
+            top_n,
+        )
+        cached = self._plan_ts_cache.get(cache_key)
+        if cached is not None:
+            return cached.copy()
         selection = self.resolve_plan_selection(view_mode, selected_location, selected_tech)
         group_key = selection["group_key"]
         selection_key = selection["selection_key"]
@@ -876,7 +890,7 @@ class ResultsHelper:
 
         emissions = self.get_plan_emissions(scenario_id=scenario_key, start_ts=start_ts, end_ts=end_ts)
         emissions_sel = emissions[emissions[selection_key] == selection_value]
-        return self._top_n_grouped_series(
+        res = self._top_n_grouped_series(
             emissions_sel,
             group_key=group_key,
             value_key="co2_kg",
@@ -884,6 +898,8 @@ class ResultsHelper:
             freq="H",
             top_n=top_n,
         )
+        self._plan_ts_cache[cache_key] = res
+        return res.copy()
 
     def get_plan_production_timeseries(
             self,
@@ -899,6 +915,20 @@ class ResultsHelper:
         """Return grouped production timeseries (top-N + Other) for the selection."""
         scenario_key = self.normalize_scenario(scenario_id)
         carrier_key = self.normalize_carrier(carrier)
+        cache_key = (
+            "prod_ts",
+            scenario_key,
+            carrier_key,
+            start_ts,
+            end_ts,
+            view_mode,
+            selected_location,
+            selected_tech,
+            top_n,
+        )
+        cached = self._plan_ts_cache.get(cache_key)
+        if cached is not None:
+            return cached.copy()
         selection = self.resolve_plan_selection(view_mode, selected_location, selected_tech)
         group_key = selection["group_key"]
         selection_key = selection["selection_key"]
@@ -907,7 +937,7 @@ class ResultsHelper:
         energy = self.get_plan_energy(scenario_id=scenario_key, start_ts=start_ts, end_ts=end_ts)
         energy_sel = energy[energy[selection_key] == selection_value]
         energy_carrier = energy_sel[energy_sel["carrier"] == carrier_key]
-        return self._top_n_grouped_series(
+        res = self._top_n_grouped_series(
             energy_carrier,
             group_key=group_key,
             value_key="energy_kwh",
@@ -915,6 +945,8 @@ class ResultsHelper:
             freq="H",
             top_n=top_n,
         )
+        self._plan_ts_cache[cache_key] = res
+        return res.copy()
 
     def get_plan_demand_timeseries(
             self,
@@ -935,6 +967,19 @@ class ResultsHelper:
             return pd.DataFrame(columns=["timestamp", "demand_kwh"])
         scenario_key = self.normalize_scenario(scenario_id)
         carrier_key = self.normalize_carrier(carrier)
+        cache_key = (
+            "demand_ts",
+            scenario_key,
+            carrier_key,
+            start_ts,
+            end_ts,
+            view_mode,
+            selected_location,
+            selected_tech,
+        )
+        cached = self._plan_ts_cache.get(cache_key)
+        if cached is not None:
+            return cached.copy()
         selection = self.resolve_plan_selection(view_mode, selected_location, selected_tech)
         selection_value = selection["selection_value"]
 
@@ -943,11 +988,13 @@ class ResultsHelper:
         if demand_carrier.empty:
             return pd.DataFrame(columns=["timestamp", "demand_kwh"])
         demand_carrier = demand_carrier[demand_carrier["location"] == selection_value]
-        return (
+        res = (
             demand_carrier.groupby(pd.Grouper(key="timestamp", freq="H"))["demand_kwh"]
             .sum()
             .reset_index()
         )
+        self._plan_ts_cache[cache_key] = res
+        return res.copy()
 
     def get_plan_detail_table(
             self,

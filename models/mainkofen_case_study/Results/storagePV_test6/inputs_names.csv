@@ -1,0 +1,8 @@
+techs,names
+battery_storage,Battery (Li-ion)
+demand_electricity,Electricity demand
+grid_electricity,Grid import
+pv_rooftop_1,PV (rooftop)
+pv_rooftop_2,PV (rooftop)
+pv_rooftop_3,PV (rooftop)
+pv_rooftop_4,PV (rooftop)

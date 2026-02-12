@@ -1,0 +1,3 @@
+costs,locs,techs,cost_om_con
+monetary,Mainkofen,grid_electricity,0.28
+monetary,Mainkofen,supply_biomass,0.02

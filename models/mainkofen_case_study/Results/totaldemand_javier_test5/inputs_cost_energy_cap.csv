@@ -1,0 +1,4 @@
+costs,locs,techs,cost_energy_cap
+monetary,Mainkofen,battery_storage,130
+monetary,Mainkofen,biomass,3758
+monetary,Mainkofen,pv_carport,1100

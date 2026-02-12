@@ -11,6 +11,7 @@ import dash
 import dash_leaflet as dl
 
 import app_data
+from figures import compute_resample_rule, downsample_series
 
 
 INPUT_MARKER_COMPONENTS = [
@@ -52,6 +53,25 @@ INPUT_ROUTE_INPUTS = [Input(f"inputs-route-{a}-{b}", "n_clicks") for a, b in app
 INPUT_HEAD_INPUTS = [Input(f"inputs-head-{a}-{b}", "n_clicks") for a, b in app_data.INPUT_CONNECTIONS]
 INPUT_HEAD_OUTPUTS = [Output(f"inputs-head-{a}-{b}", "positions") for a, b in app_data.INPUT_CONNECTIONS]
 
+def _to_scalar(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return float(value)
+    try:
+        arr = np.asarray(value)
+    except Exception:
+        return None
+    if arr.size == 0:
+        return None
+    if arr.size == 1:
+        return float(arr.reshape(-1)[0])
+    if not np.issubdtype(arr.dtype, np.number):
+        return None
+    if np.isnan(arr).all():
+        return None
+    return float(np.nanmean(arr))
+
 
 def default_inputs_panel() -> List[html.Component]:
     return [
@@ -72,16 +92,17 @@ def register_inputs_callbacks(app):
     def update_inputs_map(_):
         return INPUT_MARKER_COMPONENTS + INPUT_ROUTE_LINES + INPUT_ARROWHEADS
 
-    @app.callback(INPUT_HEAD_OUTPUTS, Input("inputs-map", "zoom"))
-    def scale_inputs_arrowheads(zoom):
-        length, width = app_data.head_sizes_for_zoom(zoom)
-        positions_list = []
-        for a, b in app_data.INPUT_CONNECTIONS:
-            a_pt = app_data.INPUT_CITIES[a]
-            b_pt = app_data.INPUT_CITIES[b]
-            tri = app_data.arrowhead_triangle_at_b(a_pt, b_pt, length_m=length, width_m=width)
-            positions_list.append(tri)
-        return positions_list
+    if INPUT_HEAD_OUTPUTS:
+        @app.callback(INPUT_HEAD_OUTPUTS, Input("inputs-map", "zoom"))
+        def scale_inputs_arrowheads(zoom):
+            length, width = app_data.head_sizes_for_zoom(zoom)
+            positions_list = []
+            for a, b in app_data.INPUT_CONNECTIONS:
+                a_pt = app_data.INPUT_CITIES[a]
+                b_pt = app_data.INPUT_CITIES[b]
+                tri = app_data.arrowhead_triangle_at_b(a_pt, b_pt, length_m=length, width_m=width)
+                positions_list.append(tri)
+            return positions_list
 
     @app.callback(
         Output("inputs-info-panel", "children"),
@@ -150,6 +171,9 @@ def register_inputs_callbacks(app):
         i0 = max(0, min(n - 1, i0))
         i1 = max(0, min(n - 1, i1))
         x = app_data.INPUT_TIMESTEPS[i0:i1 + 1] if len(app_data.INPUT_TIMESTEPS) else np.arange(i0, i1 + 1)
+        index = pd.DatetimeIndex(x) if len(x) and isinstance(x[0], (pd.Timestamp, np.datetime64)) else pd.Index(x)
+        max_points = 1200
+        rule = compute_resample_rule(index, max_points) if isinstance(index, pd.DatetimeIndex) else None
 
         demand_arrays = [
             -1 * np.array(arr)[i0:i1 + 1] for arr in app_data.INPUT_HELPER.get_location_demand(city_name, selected_carrier)
@@ -158,6 +182,16 @@ def register_inputs_callbacks(app):
         total_demand = None
         if len(demand_arrays) > 0:
             total_demand = np.sum(np.vstack(demand_arrays), axis=0)
+            demand_series = downsample_series(
+                pd.Series(total_demand, index=index),
+                max_points=max_points,
+                how="mean",
+                rule=rule,
+            )
+            total_demand = demand_series.values
+            x_demand = demand_series.index
+        else:
+            x_demand = index
 
         supply_dict = app_data.INPUT_HELPER.get_location_total_max_supply(city_name, selected_carrier)
 
@@ -188,11 +222,9 @@ def register_inputs_callbacks(app):
             return fig
 
         def add_info_li(items, label: str, value, help_text: str, fmt: str = "{:.4g}", prefix: str = "", suffix: str = ""):
-            try:
-                if value is None or (isinstance(value, float) and math.isnan(value)) or np.isnan(value):
-                    return
-            except TypeError:
-                pass
+            value = _to_scalar(value)
+            if value is None or math.isnan(value):
+                return
             items.append(
                 html.Li(
                     [
@@ -206,9 +238,9 @@ def register_inputs_callbacks(app):
 
         if total_demand is not None:
             fig_d = go.Figure()
-            fig_d.add_trace(go.Scatter(
+            fig_d.add_trace(go.Scattergl(
                 y=total_demand,
-                x=x,
+                x=x_demand,
                 name="Demand",
                 line=dict(width=2),
                 hovertemplate="%{y:.2f} kWh<extra>%{x}</extra>",
@@ -230,10 +262,17 @@ def register_inputs_callbacks(app):
             if arr is None:
                 continue
 
+            supply_series = downsample_series(
+                pd.Series(np.array(arr)[i0:i1 + 1], index=index),
+                max_points=max_points,
+                how="mean",
+                rule=rule,
+            )
+
             fig_s = go.Figure()
-            fig_s.add_trace(go.Scatter(
-                y=np.array(arr)[i0:i1 + 1],
-                x=x,
+            fig_s.add_trace(go.Scattergl(
+                y=supply_series.values,
+                x=supply_series.index,
                 name=f"{tech} Supply",
                 line=dict(width=2),
                 hovertemplate="%{y:.2f} MWh<extra>%{x}</extra>",
@@ -245,20 +284,23 @@ def register_inputs_callbacks(app):
             tech_children = []
 
             for key, value in details_map.items():
-                if key == "lifetime" and not math.isnan(value):
-                    tech_children.append(html.Li(f"Lifetime: {value} years"))
-                if key == "energy_cap_max" and not math.isnan(value):
-                    tech_children.append(html.Li(f"Maximum Energy Capacity: {value} kWh"))
-                if key == "energy_con" and not math.isnan(value):
-                    tech_children.append(html.Li(f"Energy Consumption: {value} kWh"))
-                if key == "energy_eff" and not math.isnan(value):
-                    tech_children.append(html.Li(f"Energy Efficiency: {value * 100}%"))
-                if key == "parasitic_eff" and not math.isnan(value):
-                    tech_children.append(html.Li(f"Parasitic Efficiency: {value * 100}%"))
-                if key == "resource_area_max" and not math.isnan(value):
-                    tech_children.append(html.Li(f"Maximum Resource Area: {value} m²"))
-                if key == "resource_eff" and not math.isnan(value):
-                    tech_children.append(html.Li(f"Resource Efficiency: {value * 100}%"))
+                val = _to_scalar(value)
+                if val is None or math.isnan(val):
+                    continue
+                if key == "lifetime":
+                    tech_children.append(html.Li(f"Lifetime: {val} years"))
+                if key == "energy_cap_max":
+                    tech_children.append(html.Li(f"Maximum Energy Capacity: {val} kWh"))
+                if key == "energy_con":
+                    tech_children.append(html.Li(f"Energy Consumption: {val} kWh"))
+                if key == "energy_eff":
+                    tech_children.append(html.Li(f"Energy Efficiency: {val * 100}%"))
+                if key == "parasitic_eff":
+                    tech_children.append(html.Li(f"Parasitic Efficiency: {val * 100}%"))
+                if key == "resource_area_max":
+                    tech_children.append(html.Li(f"Maximum Resource Area: {val} m²"))
+                if key == "resource_eff":
+                    tech_children.append(html.Li(f"Resource Efficiency: {val * 100}%"))
 
             add_info_li(
                 tech_children,
@@ -312,22 +354,25 @@ def register_inputs_callbacks(app):
                 tech_children = []
 
                 for key, value in details_map.items():
-                    if key == "lifetime" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Lifetime: {value} years"))
-                    if key == "energy_cap_max" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Maximum Discharge Power: {value} kWh"))
-                    if key == "energy_con" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Energy Consumption: {value} kWh"))
-                    if key == "energy_eff" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Energy Efficiency: {value * 100}%"))
-                    if key == "parasitic_eff" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Parasitic Efficiency: {value * 100}%"))
-                    if key == "resource_area_max" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Maximum Resource Area: {value} m²"))
-                    if key == "resource_eff" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Resource Efficiency: {value * 100}%"))
-                    if key == "storage_cap_max" and not math.isnan(value):
-                        tech_children.append(html.Li(f"Max Storage Capacity: {value} kWh"))
+                    val = _to_scalar(value)
+                    if val is None or math.isnan(val):
+                        continue
+                    if key == "lifetime":
+                        tech_children.append(html.Li(f"Lifetime: {val} years"))
+                    if key == "energy_cap_max":
+                        tech_children.append(html.Li(f"Maximum Discharge Power: {val} kWh"))
+                    if key == "energy_con":
+                        tech_children.append(html.Li(f"Energy Consumption: {val} kWh"))
+                    if key == "energy_eff":
+                        tech_children.append(html.Li(f"Energy Efficiency: {val * 100}%"))
+                    if key == "parasitic_eff":
+                        tech_children.append(html.Li(f"Parasitic Efficiency: {val * 100}%"))
+                    if key == "resource_area_max":
+                        tech_children.append(html.Li(f"Maximum Resource Area: {val} m²"))
+                    if key == "resource_eff":
+                        tech_children.append(html.Li(f"Resource Efficiency: {val * 100}%"))
+                    if key == "storage_cap_max":
+                        tech_children.append(html.Li(f"Max Storage Capacity: {val} kWh"))
 
                 add_info_li(
                     tech_children,

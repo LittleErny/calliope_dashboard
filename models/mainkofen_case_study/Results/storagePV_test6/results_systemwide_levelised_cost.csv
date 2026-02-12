@@ -1,0 +1,6 @@
+carriers,costs,techs,systemwide_levelised_cost
+electricity,monetary,grid_electricity,0.2799999959863962
+electricity,monetary,pv_rooftop_1,0.0
+electricity,monetary,pv_rooftop_2,0.0
+electricity,monetary,pv_rooftop_3,0.0
+electricity,monetary,pv_rooftop_4,0.0

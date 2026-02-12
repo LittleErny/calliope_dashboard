@@ -1,0 +1,8 @@
+techs,inheritance
+battery_storage,storage
+demand_electricity,demand
+grid_electricity,supply
+pv_rooftop_1,supply
+pv_rooftop_2,supply
+pv_rooftop_3,supply
+pv_rooftop_4,supply

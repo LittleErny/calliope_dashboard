@@ -1,0 +1,5 @@
+locs,techs,lookup_loc_techs
+Mainkofen,demand_electricity,Mainkofen::demand_electricity::electricity
+Mainkofen,demand_heat,Mainkofen::demand_heat::heat
+Mainkofen,grid_electricity,Mainkofen::grid_electricity::electricity
+Mainkofen,supply_biomass,Mainkofen::supply_biomass::biomass

@@ -1,0 +1,13 @@
+locs,techs,lookup_loc_techs
+Mainkofen,battery_storage,Mainkofen::battery_storage::electricity
+Mainkofen,demand_electricity,Mainkofen::demand_electricity::electricity
+Mainkofen,grid_electricity,Mainkofen::grid_electricity::electricity
+Mainkofen,heat_demand_orc_only,Mainkofen::heat_demand_orc_only::heat
+Mainkofen,pv_parking_1,Mainkofen::pv_parking_1::electricity
+Mainkofen,pv_parking_2,Mainkofen::pv_parking_2::electricity
+Mainkofen,pv_parking_3,Mainkofen::pv_parking_3::electricity
+Mainkofen,pv_parking_4,Mainkofen::pv_parking_4::electricity
+Mainkofen,pv_rooftop_1,Mainkofen::pv_rooftop_1::electricity
+Mainkofen,pv_rooftop_2,Mainkofen::pv_rooftop_2::electricity
+Mainkofen,pv_rooftop_3,Mainkofen::pv_rooftop_3::electricity
+Mainkofen,supply_biomass,Mainkofen::supply_biomass::biomass

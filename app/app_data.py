@@ -16,11 +16,11 @@ from helpers.results_helper import ResultsHelper
 # -----------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-MODEL_DIR = BASE_DIR / "models" / "1_german_scale"
+MODEL_DIR = BASE_DIR / "models" / "mainkofen_case_study"
 
-INPUTS_PATH = MODEL_DIR / "german_model_inputs.pkl"
-PLANNING_RESULTS_PATH = MODEL_DIR / "german_model_results_planning.pkl"
-OPERATE_RESULTS_PATH = MODEL_DIR / "german_model_results_operate.pkl"
+INPUTS_PATH = MODEL_DIR / "mainkofen_model_inputs.pkl"
+PLANNING_RESULTS_PATH = MODEL_DIR / "mainkofen_model_results_planning.pkl"
+OPERATE_RESULTS_PATH = MODEL_DIR / "mainkofen_model_results_operate.pkl"
 
 
 def _load_pickle(path: Path, label: str):
