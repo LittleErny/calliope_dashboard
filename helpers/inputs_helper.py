@@ -1,5 +1,6 @@
 # inputs_helper.py
 import warnings
+from typing import Optional
 
 import xarray
 import numpy as np
@@ -27,6 +28,112 @@ class InputsHelper:
         self.inputs = inputs
         self._location_demand_cache: dict[tuple[str, str], list[np.ndarray]] = {}
         self._location_supply_cache: dict[tuple[str, str], dict[str, np.ndarray]] = {}
+
+    def _tech_category(self, tech_name: str) -> str:
+        try:
+            idx = list(self.inputs.techs.data).index(tech_name.split(":")[0])
+            return str(self.inputs.inheritance.data[idx]).split(".")[-1]
+        except Exception:
+            return ""
+
+    def tech_is_conversion(self, tech_name: str) -> bool:
+        return self._tech_category(tech_name) in ("conversion", "conversion_plus")
+
+    def get_loc_tech_capacity(self, location: str, tech: str) -> float:
+        loc_tech_key = f"{location}::{tech}"
+        try:
+            idx = list(self.inputs.loc_techs.data).index(loc_tech_key)
+        except ValueError:
+            return np.nan
+        cap_equals = np.nan
+        cap_max = np.nan
+        try:
+            cap_equals = float(self.inputs.energy_cap_equals.data[idx])
+        except Exception:
+            pass
+        try:
+            cap_max = float(self.inputs.energy_cap_max.data[idx])
+        except Exception:
+            pass
+        if not np.isnan(cap_equals):
+            return cap_equals
+        return cap_max
+
+    def get_loc_tech_energy_eff(self, location: str, tech: str) -> Optional[np.ndarray]:
+        if not hasattr(self.inputs, "energy_eff"):
+            return None
+        loc_tech_key = f"{location}::{tech}"
+        try:
+            if "loc_techs" in self.inputs.energy_eff.dims:
+                return np.asarray(self.inputs.energy_eff.sel(loc_techs=loc_tech_key).values)
+        except Exception:
+            pass
+        try:
+            idx = list(self.inputs.loc_techs.data).index(loc_tech_key)
+            return np.asarray(self.inputs.energy_eff.data[idx])
+        except Exception:
+            return None
+
+    def get_conversion_tech_io(self, location: str, tech: str) -> dict[str, list[str]]:
+        loc_tech_key = f"{location}::{tech}"
+        io: dict[str, list[str]] = {"in": [], "out": [], "out_2": []}
+        if not hasattr(self.inputs, "loc_techs_conversion_plus") or not hasattr(self.inputs, "lookup_loc_techs_conversion_plus"):
+            return io
+        try:
+            if loc_tech_key not in list(self.inputs.loc_techs_conversion_plus.values):
+                return io
+            tiers = list(self.inputs.lookup_loc_techs_conversion_plus.coords["carrier_tiers"].values)
+            for tier in tiers:
+                try:
+                    vals = self.inputs.lookup_loc_techs_conversion_plus.sel(
+                        carrier_tiers=tier,
+                        loc_techs_conversion_plus=loc_tech_key,
+                    ).values
+                except Exception:
+                    continue
+                arr = np.asarray(vals).reshape(-1)
+                for val in arr:
+                    if val is None:
+                        continue
+                    val_str = str(val)
+                    if not val_str or val_str.lower() == "nan":
+                        continue
+                    parts = val_str.split("::")
+                    if len(parts) >= 3:
+                        io.setdefault(str(tier), []).append(parts[2])
+        except Exception:
+            return io
+        return io
+
+    def get_conversion_carrier_ratios(self, location: str, tech: str) -> dict[tuple[str, str], float]:
+        loc_prefix = f"{location}::{tech}::"
+        ratios: dict[tuple[str, str], float] = {}
+        if not hasattr(self.inputs, "carrier_ratios") or not hasattr(self.inputs, "loc_tech_carriers_conversion_plus"):
+            return ratios
+        try:
+            tiers = list(self.inputs.carrier_ratios.coords["carrier_tiers"].values)
+            for ltc in self.inputs.loc_tech_carriers_conversion_plus.values:
+                ltc_str = str(ltc)
+                if not ltc_str.startswith(loc_prefix):
+                    continue
+                carrier = ltc_str.split("::", 2)[2]
+                for tier in tiers:
+                    try:
+                        val = self.inputs.carrier_ratios.sel(
+                            carrier_tiers=tier,
+                            loc_tech_carriers_conversion_plus=ltc,
+                        ).values
+                    except Exception:
+                        continue
+                    arr = np.asarray(val).reshape(-1)
+                    if arr.size:
+                        try:
+                            ratios[(str(tier), carrier)] = float(arr[0])
+                        except Exception:
+                            continue
+        except Exception:
+            return ratios
+        return ratios
 
     def get_locations(self) -> list[str]:
         """

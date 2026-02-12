@@ -347,6 +347,124 @@ def register_inputs_callbacks(app):
                 )
             )
 
+        conversion_techs = [t for t in tech_names if app_data.INPUT_HELPER.tech_is_conversion(t)]
+        for tech in conversion_techs:
+            io_map = app_data.INPUT_HELPER.get_conversion_tech_io(city_name, tech)
+            carriers = {c for lst in io_map.values() for c in lst}
+            if not carriers or selected_carrier not in carriers:
+                continue
+
+            base_cap = _to_scalar(app_data.INPUT_HELPER.get_loc_tech_capacity(city_name, tech))
+            eff_arr = app_data.INPUT_HELPER.get_loc_tech_energy_eff(city_name, tech)
+            eff_max = None
+            if eff_arr is not None:
+                try:
+                    eff_max = float(np.nanmax(np.asarray(eff_arr)))
+                except Exception:
+                    eff_max = None
+            input_max = None
+            if base_cap is not None and not math.isnan(base_cap):
+                if eff_max is not None and eff_max > 0:
+                    input_max = base_cap / eff_max
+                else:
+                    input_max = base_cap
+
+            ratio_map = app_data.INPUT_HELPER.get_conversion_carrier_ratios(city_name, tech)
+            inputs = io_map.get("in", [])
+            primary_out = io_map.get("out", [])
+            secondary_out = io_map.get("out_2", [])
+            outputs = primary_out + secondary_out
+
+            tech_label = f"{tech} (conversion)"
+            node_labels = inputs + [tech_label] + outputs
+            node_colors = []
+            for label in node_labels:
+                if label == tech_label:
+                    node_colors.append("#8e44ad")
+                elif label in inputs:
+                    node_colors.append("#2d74da")
+                else:
+                    node_colors.append("#2ecc71")
+
+            src_idx = []
+            tgt_idx = []
+            values = []
+
+            input_val = input_max if input_max is not None and not math.isnan(input_max) else (base_cap or 0.0)
+            if inputs:
+                per_input = input_val / max(1, len(inputs))
+                for i, _ in enumerate(inputs):
+                    src_idx.append(i)
+                    tgt_idx.append(len(inputs))
+                    values.append(per_input)
+
+            for j, carrier in enumerate(outputs):
+                ratio = ratio_map.get(("out_2", carrier), 1.0 if carrier in secondary_out else 1.0)
+                out_val = (base_cap or 0.0) * ratio if base_cap is not None else 0.0
+                src_idx.append(len(inputs))
+                tgt_idx.append(len(inputs) + 1 + j)
+                values.append(out_val)
+
+            sankey_fig = go.Figure(
+                data=[
+                    go.Sankey(
+                        node=dict(label=node_labels, pad=10, thickness=12, color=node_colors),
+                        link=dict(source=src_idx, target=tgt_idx, value=values),
+                    )
+                ]
+            )
+            sankey_fig.update_layout(
+                title="Conversion flow (max)",
+                height=220,
+                margin=dict(l=10, r=10, t=35, b=10),
+            )
+
+            tech_children = []
+            if inputs:
+                tech_children.append(html.Li(f"Inputs: {', '.join(inputs)}"))
+            if outputs:
+                tech_children.append(html.Li(f"Outputs: {', '.join(outputs)}"))
+            if input_max is not None and not math.isnan(input_max):
+                tech_children.append(html.Li(f"Max input: {input_max:.0f} kWh"))
+            if base_cap is not None and not math.isnan(base_cap):
+                for carrier in primary_out:
+                    tech_children.append(html.Li(f"Max output ({carrier}): {base_cap:.0f} kWh"))
+                for carrier in secondary_out:
+                    ratio = ratio_map.get(("out_2", carrier), 1.0)
+                    tech_children.append(html.Li(f"Max output ({carrier}): {base_cap * ratio:.0f} kWh"))
+
+            details_map = app_data.INPUT_HELPER.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
+            cost_map = app_data.INPUT_HELPER.get_loc_tech_costs(city_name, tech)
+            for key, value in details_map.items():
+                val = _to_scalar(value)
+                if val is None or math.isnan(val):
+                    continue
+                if key == "lifetime":
+                    tech_children.append(html.Li(f"Lifetime: {val} years"))
+                if key == "energy_eff":
+                    tech_children.append(html.Li(f"Energy Efficiency: {val * 100}%"))
+
+            add_info_li(
+                tech_children,
+                "Upfront cost",
+                cost_map.get("cost_energy_cap"),
+                "Calliope cost_energy_cap: investment cost per unit capacity (EUR per kWh).",
+                prefix="€",
+                suffix=" per kWh",
+            )
+
+            details = html.Ul(children=tech_children)
+            children.append(
+                html.Div(
+                    style=card_style,
+                    children=[
+                        html.H4(tech, style={"marginBottom": "6px"}),
+                        details,
+                        dcc.Graph(figure=sankey_fig, style={"height": "220px", "width": "100%"}),
+                    ],
+                )
+            )
+
         for tech in tech_names:
             if app_data.INPUT_HELPER.tech_is_storage(tech):
                 details_map = app_data.INPUT_HELPER.get_loc_tech_carrier_stats(city_name, tech, selected_carrier)
