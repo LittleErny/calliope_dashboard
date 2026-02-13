@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import pickle
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -28,6 +28,30 @@ def _load_pickle(path: Path, label: str):
         raise FileNotFoundError(f"{label} pickle not found: {path}")
     with open(path, "rb") as f:
         return pickle.load(f)
+
+
+def _read_model_name_from_pickle(inputs) -> Optional[str]:
+    if inputs is None or not hasattr(inputs, "attrs"):
+        return None
+    cfg = inputs.attrs.get("model_config")
+    if isinstance(cfg, dict):
+        try:
+            model = cfg.get("model") or {}
+            name = model.get("name") if isinstance(model, dict) else None
+            return str(name) if name else None
+        except Exception:
+            return None
+    if isinstance(cfg, str):
+        for raw in cfg.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("name:"):
+                value = line.split(":", 1)[1].strip()
+                if value.startswith(("'", "\"")) and value.endswith(("'", "\"")):
+                    value = value[1:-1]
+                return value or None
+    return None
 
 
 # -----------------------------
@@ -107,6 +131,16 @@ OPERATE_TIMESTEPS = OPERATE_HELPER.get_timesteps_datetime()
 OPERATE_T = len(OPERATE_TIMESTEPS)
 OPERATE_CARRIERS = OPERATE_HELPER.get_carriers()
 OPERATE_CONNECTIONS = OPERATE_HELPER.get_physical_lines()
+
+# -----------------------------
+# Model metadata
+# -----------------------------
+
+MODEL_NAME = _read_model_name_from_pickle(LOADED_INPUTS)
+
+
+def get_model_name() -> Optional[str]:
+    return MODEL_NAME or _read_model_name_from_pickle(LOADED_INPUTS)
 
 # -----------------------------
 # Map geometry helpers shared across tabs

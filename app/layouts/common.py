@@ -7,11 +7,15 @@ from figures import APP_BG
 
 
 def layout_header() -> html.Div:
+    title = "Calliope Dashboard"
+    model_name = app_data.get_model_name()
+    if model_name:
+        title = f"{title} - {model_name}"
     return html.Div(
         [
             html.Div(
                 [
-                    html.Div("Calliope Dashboard", style={"fontSize": "18px", "fontWeight": "800"}),
+                    html.Div(title, style={"fontSize": "18px", "fontWeight": "800"}),
                 ],
                 style={"display": "flex", "flexDirection": "column", "gap": "2px"},
             ),

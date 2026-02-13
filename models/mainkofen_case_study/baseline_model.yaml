@@ -5,12 +5,11 @@ model:
   name: "Mainkofen Hospital — Baseline"
   timeseries_data_path: "timeseries_data"
   calliope_version: 0.6.10
-
-time:
-  resolution: 1H
-  # 24 hours to keep it compact; extend freely later
-  start: "2023-01-01 00:00"
-  end:   "2023-12-31 23:00"
+  time:
+    resolution: 1H
+    # 24 hours to keep it compact; extend freely later
+    start: "2023-01-01 00:00"
+    end:   "2023-12-31 23:00"
 
 run:
   objective_options:

@@ -23,6 +23,8 @@ LOAD_RED = (183, 28, 28)
 LINE_MIN_WIDTH = 2
 LINE_MAX_WIDTH = 8
 FLOW_EPS = 1e-6
+OPERATE_MAX_POINTS_LINE = 1200
+OPERATE_MAX_POINTS_BAR = 300
 
 
 def _lerp_color(a: Tuple[int, int, int], b: Tuple[int, int, int], t: float) -> str:
@@ -263,13 +265,13 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
     Build a stacked bar card for demand coverage by tech + unmet.
     """
     helper = app_data.OPERATE_HELPER
-    demand_ts = helper.get_location_demand_window(location, carrier, start_idx, end_idx)
+    demand_ts = helper.get_location_effective_demand_window(location, carrier, start_idx, end_idx)
     unmet_ts = helper.get_location_unmet_window(location, carrier, start_idx, end_idx)
 
     if demand_ts.empty:
         return html.Div()
 
-    max_points = 1200
+    max_points = OPERATE_MAX_POINTS_BAR
     rule = compute_resample_rule(demand_ts.index, max_points)
     demand_ts = downsample_series(demand_ts, max_points=max_points, how="mean", rule=rule)
     unmet_ts = downsample_series(unmet_ts, max_points=max_points, how="mean", rule=rule)
@@ -440,7 +442,7 @@ def _build_line_timeseries_figure(a: str, b: str, carrier: str, start_idx: int, 
         if ts.abs().sum() > FLOW_EPS:
             series.append((f"{b} → {a}", ts))
 
-    max_points = 1200
+    max_points = OPERATE_MAX_POINTS_LINE
     rule = compute_resample_rule(series[0][1].index, max_points) if series else None
 
     fig = go.Figure()
@@ -513,7 +515,7 @@ def _build_storage_figure(
     if mode == "flow":
         charge_ts = helper.get_location_tech_consumption_window(location, tech, carrier, start_idx, end_idx).abs()
         discharge_ts = helper.get_location_tech_production_window(location, tech, carrier, start_idx, end_idx).abs()
-        max_points = 1200
+        max_points = OPERATE_MAX_POINTS_BAR
         base_index = charge_ts.index if not charge_ts.empty else discharge_ts.index
         rule = compute_resample_rule(base_index, max_points) if len(base_index) else None
         charge_ts = downsample_series(charge_ts, max_points=max_points, how="mean", rule=rule)
@@ -559,7 +561,7 @@ def _build_storage_figure(
         return fig
 
     # Default: SOC
-    max_points = 1200
+    max_points = OPERATE_MAX_POINTS_LINE
     rule = compute_resample_rule(soc_ts.index, max_points) if not soc_ts.empty else None
     soc_ts = downsample_series(soc_ts, max_points=max_points, how="mean", rule=rule)
     pct = (soc_ts / storage_cap * 100) if storage_cap > 0 else np.zeros(len(soc_ts))
@@ -659,6 +661,7 @@ def _build_location_cards(location: str, carrier: str, start_idx: int, end_idx: 
     """
     helper = app_data.OPERATE_HELPER
     cards: List[html.Div] = []
+    carrier_key = helper.normalize_carrier(carrier)
 
     demand_card = _build_demand_unmet_card(location, carrier, start_idx, end_idx)
     if demand_card.children:
@@ -669,6 +672,9 @@ def _build_location_cards(location: str, carrier: str, start_idx: int, end_idx: 
     for tech in techs:
         base = tech.split(":", 1)[0]
         if helper.is_storage_tech(base):
+            storage_carrier = helper.get_location_tech_carrier(location, tech)
+            if storage_carrier and storage_carrier != carrier_key:
+                continue
             storage_techs.append(tech)
 
     for tech in storage_techs:

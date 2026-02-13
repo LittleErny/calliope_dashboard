@@ -30,10 +30,14 @@ class ResultsHelper:
 
         self._assets_df: Optional[pd.DataFrame] = None
         self._energy_df: Optional[pd.DataFrame] = None
+        self._con_df: Optional[pd.DataFrame] = None
         self._var_cost_df: Optional[pd.DataFrame] = None
         self._emissions_df: Optional[pd.DataFrame] = None
         self._demand_df: Optional[pd.DataFrame] = None
         self._plan_ts_cache: Dict[Tuple, pd.DataFrame] = {}
+        self._conversion_io_cache: Dict[str, Dict[str, List[str]]] = {}
+        self._conversion_ratio_cache: Dict[str, Dict[Tuple[str, str], float]] = {}
+        self._energy_eff_max_cache: Dict[str, float] = {}
 
     def _pick_cost_key(self) -> Optional[str]:
         """Select a default cost dimension key from results (monetary first, else first available)."""
@@ -188,6 +192,11 @@ class ResultsHelper:
         """Return True if tech category is transmission (requires inputs to be accurate)."""
         base = str(tech).split(":", 1)[0]
         return self._tech_category_map.get(base) == "transmission"
+
+    def _is_conversion(self, tech: str) -> bool:
+        """Return True if tech category is conversion/conversion_plus (requires inputs)."""
+        base = str(tech).split(":", 1)[0]
+        return self._tech_category_map.get(base) in {"conversion", "conversion_plus"}
 
     def _is_demand(self, tech: str) -> bool:
         """Return True if tech category is demand (requires inputs to be accurate)."""
@@ -545,6 +554,25 @@ class ResultsHelper:
             ["scenario_id", "timestamp", "location", "technology", "technology_raw", "carrier", "energy_kwh"]
         ]
 
+    def _build_consumption_df(self) -> pd.DataFrame:
+        """Build consumption time series dataframe from results.carrier_con."""
+        if not hasattr(self.results, "carrier_con"):
+            return pd.DataFrame(
+                columns=["scenario_id", "timestamp", "location", "technology", "technology_raw", "carrier",
+                         "energy_kwh"]
+            )
+        con_df = self._dataarray_to_df(self.results.carrier_con, "energy_kwh")
+        con_df[["location", "technology_raw", "carrier"]] = con_df["loc_tech_carriers_con"].apply(
+            lambda x: pd.Series(self._split_loc_tech_carrier(x))
+        )
+        con_df["technology"] = con_df["technology_raw"].apply(self._humanize_tech)
+        con_df["timestamp"] = pd.to_datetime(con_df["timesteps"], errors="coerce")
+        con_df["energy_kwh"] = con_df["energy_kwh"].fillna(0.0)
+        con_df = con_df[~con_df["technology_raw"].apply(self._is_transmission)]
+        return con_df[
+            ["scenario_id", "timestamp", "location", "technology", "technology_raw", "carrier", "energy_kwh"]
+        ]
+
     def _build_variable_cost_df(self) -> pd.DataFrame:
         """Build variable OPEX time series dataframe from results.cost_var/cost_var_rhs."""
         if not hasattr(self.results, "cost_var") and not hasattr(self.results, "cost_var_rhs"):
@@ -624,6 +652,131 @@ class ResultsHelper:
                 mapping[str(loc_tech)] = parts[2]
         return mapping
 
+    def _get_conversion_io(self, loc_tech: str) -> Dict[str, List[str]]:
+        cached = self._conversion_io_cache.get(loc_tech)
+        if cached is not None:
+            return cached
+        io: Dict[str, List[str]] = {"in": [], "out": [], "out_2": []}
+        if self.inputs is None or not hasattr(self.inputs, "loc_techs_conversion_plus"):
+            self._conversion_io_cache[loc_tech] = io
+            return io
+        try:
+            if loc_tech not in list(self.inputs.loc_techs_conversion_plus.values):
+                self._conversion_io_cache[loc_tech] = io
+                return io
+            lookup = self.inputs.lookup_loc_techs_conversion_plus
+            tiers = list(lookup.coords["carrier_tiers"].values)
+            for tier in tiers:
+                try:
+                    vals = lookup.sel(carrier_tiers=tier, loc_techs_conversion_plus=loc_tech).values
+                except Exception:
+                    continue
+                arr = np.asarray(vals).reshape(-1)
+                for val in arr:
+                    if val is None:
+                        continue
+                    val_str = str(val)
+                    if not val_str or val_str.lower() == "nan":
+                        continue
+                    parts = val_str.split("::")
+                    if len(parts) >= 3:
+                        io.setdefault(str(tier), []).append(parts[2])
+        except Exception:
+            pass
+        self._conversion_io_cache[loc_tech] = io
+        return io
+
+    def _get_conversion_ratios(self, loc_tech: str) -> Dict[Tuple[str, str], float]:
+        cached = self._conversion_ratio_cache.get(loc_tech)
+        if cached is not None:
+            return cached
+        ratios: Dict[Tuple[str, str], float] = {}
+        if self.inputs is None or not hasattr(self.inputs, "carrier_ratios") or not hasattr(self.inputs, "loc_tech_carriers_conversion_plus"):
+            self._conversion_ratio_cache[loc_tech] = ratios
+            return ratios
+        prefix = f"{loc_tech}::"
+        try:
+            tiers = list(self.inputs.carrier_ratios.coords["carrier_tiers"].values)
+            for ltc in self.inputs.loc_tech_carriers_conversion_plus.values:
+                ltc_str = str(ltc)
+                if not ltc_str.startswith(prefix):
+                    continue
+                carrier = ltc_str.split("::", 2)[2]
+                for tier in tiers:
+                    try:
+                        val = self.inputs.carrier_ratios.sel(
+                            carrier_tiers=tier,
+                            loc_tech_carriers_conversion_plus=ltc,
+                        ).values
+                    except Exception:
+                        continue
+                    arr = np.asarray(val).reshape(-1)
+                    if arr.size:
+                        try:
+                            ratios[(str(tier), carrier)] = float(arr[0])
+                        except Exception:
+                            continue
+        except Exception:
+            pass
+        self._conversion_ratio_cache[loc_tech] = ratios
+        return ratios
+
+    def _get_energy_eff_max(self, loc_tech: str) -> float:
+        cached = self._energy_eff_max_cache.get(loc_tech)
+        if cached is not None:
+            return cached
+        if self.inputs is None or not hasattr(self.inputs, "energy_eff"):
+            self._energy_eff_max_cache[loc_tech] = 1.0
+            return 1.0
+        try:
+            if "loc_techs" in self.inputs.energy_eff.dims:
+                vals = self.inputs.energy_eff.sel(loc_techs=loc_tech).values
+            else:
+                idx = list(self.inputs.loc_techs.values).index(loc_tech)
+                vals = self.inputs.energy_eff.data[idx]
+            arr = np.asarray(vals).astype(float)
+            eff = float(np.nanmax(arr))
+            if eff <= 0 or np.isnan(eff):
+                eff = 1.0
+        except Exception:
+            eff = 1.0
+        self._energy_eff_max_cache[loc_tech] = eff
+        return eff
+
+    def _capacity_for_carrier(
+            self,
+            location: str,
+            technology_raw: str,
+            built_capacity_kw: float,
+            carrier_key: str,
+    ) -> float:
+        try:
+            base_cap = float(built_capacity_kw)
+        except Exception:
+            return 0.0
+        if base_cap <= 0:
+            return 0.0
+
+        loc_tech = f"{location}::{technology_raw}"
+        if self._is_conversion(technology_raw):
+            io = self._get_conversion_io(loc_tech)
+            ratios = self._get_conversion_ratios(loc_tech)
+            if carrier_key in io.get("out", []):
+                ratio = ratios.get(("out", carrier_key), 1.0)
+                return base_cap * ratio
+            if carrier_key in io.get("out_2", []):
+                ratio = ratios.get(("out_2", carrier_key), 1.0)
+                return base_cap * ratio
+            if carrier_key in io.get("in", []):
+                eff = self._get_energy_eff_max(loc_tech)
+                return base_cap / eff if eff > 0 else base_cap
+            return 0.0
+
+        carrier_map = self._build_loc_tech_carrier_map()
+        if carrier_map.get(loc_tech) != carrier_key:
+            return 0.0
+        return base_cap
+
     def get_plan_assets(self, scenario_id: Optional[str] = None) -> pd.DataFrame:
         """
         Return asset-level planning data.
@@ -651,6 +804,24 @@ class ResultsHelper:
         if self._energy_df is None:
             self._energy_df = self._build_energy_df()
         df = self._energy_df.copy()
+        scenario_key = self.normalize_scenario(scenario_id) if scenario_id else None
+        df = self._filter_scenario(df, scenario_key)
+        return self._filter_time(df, start_ts, end_ts)
+
+    def get_plan_consumption(
+            self,
+            scenario_id: Optional[str] = None,
+            start_ts: Optional[pd.Timestamp] = None,
+            end_ts: Optional[pd.Timestamp] = None,
+    ) -> pd.DataFrame:
+        """
+        Return consumption time series data.
+
+        Columns: scenario_id, timestamp, location, technology, technology_raw, carrier, energy_kwh.
+        """
+        if self._con_df is None:
+            self._con_df = self._build_consumption_df()
+        df = self._con_df.copy()
         scenario_key = self.normalize_scenario(scenario_id) if scenario_id else None
         df = self._filter_scenario(df, scenario_key)
         return self._filter_time(df, start_ts, end_ts)
@@ -786,24 +957,41 @@ class ResultsHelper:
     def get_plan_capacity_group(
             self,
             scenario_id: str,
+            carrier: str,
             view_mode: str,
             selected_location: Optional[str],
             selected_tech: Optional[str],
     ) -> pd.DataFrame:
-        """Return grouped capacity data for the current selection."""
+        """Return grouped capacity data for the current selection and carrier."""
         scenario_key = self.normalize_scenario(scenario_id)
+        carrier_key = self.normalize_carrier(carrier)
         selection = self.resolve_plan_selection(view_mode, selected_location, selected_tech)
         group_key = selection["group_key"]
         selection_key = selection["selection_key"]
         selection_value = selection["selection_value"]
 
         assets = self.get_plan_assets(scenario_id=scenario_key)
-        assets_sel = assets[assets[selection_key] == selection_value]
+        assets_sel = assets[assets[selection_key] == selection_value].copy()
+        if assets_sel.empty:
+            return assets_sel
+
+        assets_sel["carrier_capacity_kw"] = assets_sel.apply(
+            lambda row: self._capacity_for_carrier(
+                row["location"],
+                row["technology_raw"],
+                row["built_capacity_kw"],
+                carrier_key,
+            ),
+            axis=1,
+        )
+        assets_sel = assets_sel[assets_sel["carrier_capacity_kw"] > 0]
+        if assets_sel.empty:
+            return assets_sel
 
         return (
-            assets_sel.groupby(group_key, as_index=False)["built_capacity_kw"]
+            assets_sel.groupby(group_key, as_index=False)["carrier_capacity_kw"]
             .sum()
-            .sort_values("built_capacity_kw", ascending=False)
+            .sort_values("carrier_capacity_kw", ascending=False)
         )
 
     def get_plan_cost_group(
@@ -985,14 +1173,29 @@ class ResultsHelper:
 
         demand = self.get_plan_demand(scenario_id=scenario_key, start_ts=start_ts, end_ts=end_ts)
         demand_carrier = demand[demand["carrier"] == carrier_key]
-        if demand_carrier.empty:
-            return pd.DataFrame(columns=["timestamp", "demand_kwh"])
         demand_carrier = demand_carrier[demand_carrier["location"] == selection_value]
-        res = (
+        demand_ts = (
             demand_carrier.groupby(pd.Grouper(key="timestamp", freq="H"))["demand_kwh"]
             .sum()
-            .reset_index()
         )
+
+        conv_inputs = self.get_plan_consumption(scenario_id=scenario_key, start_ts=start_ts, end_ts=end_ts)
+        conv_inputs = conv_inputs[
+            (conv_inputs["carrier"] == carrier_key)
+            & (conv_inputs["location"] == selection_value)
+            & (conv_inputs["technology_raw"].apply(self._is_conversion))
+        ]
+        conv_ts = (
+            conv_inputs.groupby(pd.Grouper(key="timestamp", freq="H"))["energy_kwh"]
+            .sum()
+        )
+        conv_ts = conv_ts.abs()
+
+        combined = demand_ts.add(conv_ts, fill_value=0.0)
+        combined.name = "demand_kwh"
+        if combined.empty:
+            return pd.DataFrame(columns=["timestamp", "demand_kwh"])
+        res = combined.reset_index()
         self._plan_ts_cache[cache_key] = res
         return res.copy()
 

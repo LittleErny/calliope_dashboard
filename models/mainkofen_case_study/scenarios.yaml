@@ -2,6 +2,7 @@ overrides:
   operate_override:
     run:
       mode: operate
+      cyclic_storage: false
       operation:
         window: 336
         horizon: 336

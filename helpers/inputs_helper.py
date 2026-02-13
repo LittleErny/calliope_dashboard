@@ -515,10 +515,11 @@ class InputsHelper:
                 details["resource_area_max"] = self.inputs.resource_area_max.data[resource_area_max_index]
 
             # resource_eff
-            resource_eff_search_str = loc_tech_search_str
-            if resource_eff_search_str in list(self.inputs.resource_eff.data):
-                resource_eff_index = list(self.inputs.resource_eff.data).index(resource_eff_search_str)
-                details["resource_eff"] = self.inputs.resource_eff.data[resource_eff_index]
+            if "resource_eff" in self.inputs:
+                resource_eff_search_str = loc_tech_search_str
+                if resource_eff_search_str in list(self.inputs.resource_eff.data):
+                    resource_eff_index = list(self.inputs.resource_eff.data).index(resource_eff_search_str)
+                    details["resource_eff"] = self.inputs.resource_eff.data[resource_eff_index]
 
             # lifetime
             details["lifetime"] = self.inputs.lifetime.data[loc_tech_index]
@@ -602,10 +603,11 @@ class InputsHelper:
             details["energy_eff"] = self.inputs.energy_eff.data[loc_tech_index]
 
             # resource_eff
-            resource_eff_search_str = loc_tech_search_str
-            if resource_eff_search_str in list(self.inputs.resource_eff.data):
-                resource_eff_index = list(self.inputs.resource_eff.data).index(resource_eff_search_str)
-                details["resource_eff"] = self.inputs.resource_eff.data[resource_eff_index]
+            if "resource_eff" in self.inputs:
+                resource_eff_search_str = loc_tech_search_str
+                if resource_eff_search_str in list(self.inputs.resource_eff.data):
+                    resource_eff_index = list(self.inputs.resource_eff.data).index(resource_eff_search_str)
+                    details["resource_eff"] = self.inputs.resource_eff.data[resource_eff_index]
 
             # lifetime
             details["lifetime"] = self.inputs.lifetime.data[loc_tech_index]

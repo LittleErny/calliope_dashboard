@@ -70,6 +70,7 @@ class OperateResultsHelper:
         self._unmet_frac_cache: Dict[Tuple[str, str], pd.Series] = {}
         self._prod_total_cache: Dict[Tuple[str, str, str], float] = {}
         self._prod_total_loc_cache: Dict[Tuple[str, str], float] = {}
+        self._conv_con_loc_ts_cache: Dict[Tuple[str, str], pd.Series] = {}
         self._var_cost_loc_cache: Dict[str, float] = {}
         self._line_capacity_cache: Dict[str, float] = {}
         self._line_flow_cache: Dict[Tuple[str, str], pd.Series] = {}
@@ -254,6 +255,13 @@ class OperateResultsHelper:
         for (loc, tech, carrier), group in self._con_df.groupby(["loc", "tech", "carrier"]):
             ts = group.set_index("timesteps")["energy"].reindex(self._time_index, fill_value=0.0)
             self._con_ts_cache[(loc, tech, carrier)] = ts
+            base = tech.split(":", 1)[0]
+            if self._tech_category_map.get(base) in {"conversion", "conversion_plus"}:
+                key = (loc, carrier)
+                if key in self._conv_con_loc_ts_cache:
+                    self._conv_con_loc_ts_cache[key] = self._conv_con_loc_ts_cache[key].add(ts, fill_value=0.0)
+                else:
+                    self._conv_con_loc_ts_cache[key] = ts.copy()
 
         # Demand timeseries per loc-carrier
         for (loc, carrier), group in self._demand_df.groupby(["loc", "carrier"]):
@@ -472,6 +480,13 @@ class OperateResultsHelper:
                 return c
         return self._carriers[0]
 
+    def get_location_tech_carrier(self, location: str, tech: str) -> str:
+        """
+        Return carrier for a non-conversion tech at a location, if known.
+        """
+        loc_tech = f"{location}::{tech}"
+        return str(self._loc_tech_carrier_map.get(loc_tech, ""))
+
     def get_locations(self) -> List[str]:
         """
         Return all locations present in results.
@@ -654,6 +669,33 @@ class OperateResultsHelper:
             return 0.0
         return float(frac.iloc[idx])
 
+    def get_location_conversion_consumption_timeseries(self, location: str, carrier: str) -> pd.Series:
+        """
+        Return total conversion consumption timeseries for a location and carrier.
+        """
+        carrier_key = self.normalize_carrier(carrier)
+        ts = self._conv_con_loc_ts_cache.get((location, carrier_key))
+        if ts is None:
+            return pd.Series(index=self._time_index, data=0.0)
+        return ts
+
+    def get_location_conversion_consumption_window(self, location: str, carrier: str, start_idx: int,
+                                                   end_idx: int) -> pd.Series:
+        """
+        Return conversion consumption timeseries within a time window.
+        """
+        ts = self.get_location_conversion_consumption_timeseries(location, carrier)
+        return self._slice_series(ts, start_idx, end_idx)
+
+    def get_location_effective_demand_window(self, location: str, carrier: str, start_idx: int,
+                                             end_idx: int) -> pd.Series:
+        """
+        Return demand + conversion-input consumption within a time window.
+        """
+        demand_ts = self.get_location_demand_window(location, carrier, start_idx, end_idx)
+        conv_ts = self.get_location_conversion_consumption_window(location, carrier, start_idx, end_idx).abs()
+        return demand_ts.add(conv_ts, fill_value=0.0)
+
     def get_location_max_unmet_fraction(self, location: str, carrier: str) -> float:
         """
         Return maximum unmet fraction over the window for a location and carrier.
@@ -678,11 +720,12 @@ class OperateResultsHelper:
         Return basic operate-mode KPIs for a location over the full window.
         """
         demand_ts = self.get_location_demand_timeseries(location, carrier)
+        conv_ts = self.get_location_conversion_consumption_timeseries(location, carrier).abs()
         unmet_ts = self.get_location_unmet_timeseries(location, carrier)
         prod_total = self.get_location_total_production(location, carrier)
 
         kpis = {
-            "total_demand": float(demand_ts.sum()),
+            "total_demand": float(demand_ts.add(conv_ts, fill_value=0.0).sum()),
             "total_unmet": float(unmet_ts.sum()),
             "total_production": float(prod_total),
         }
@@ -695,7 +738,7 @@ class OperateResultsHelper:
         """
         Return operate-mode KPIs for a location within a time window.
         """
-        demand_ts = self.get_location_demand_window(location, carrier, start_idx, end_idx)
+        demand_ts = self.get_location_effective_demand_window(location, carrier, start_idx, end_idx)
         unmet_ts = self.get_location_unmet_window(location, carrier, start_idx, end_idx)
         carrier_key = self.normalize_carrier(carrier)
 

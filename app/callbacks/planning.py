@@ -134,6 +134,7 @@ def register_planning_callbacks(app):
 
         cap_group = app_data.RESULTS_HELPER.get_plan_capacity_group(
             scenario_id=scenario_key,
+            carrier=carrier_key,
             view_mode=view_mode,
             selected_location=selected_location,
             selected_tech=selected_tech,
@@ -144,7 +145,9 @@ def register_planning_callbacks(app):
         else:
             cap_fig = go.Figure()
             bar_colors = [resolve_tech_color(label) for label in cap_group[group_key]] if group_key == "technology" else None
-            cap_fig.add_trace(go.Bar(x=cap_group[group_key], y=cap_group["built_capacity_kw"], marker_color=bar_colors))
+            if bar_colors and any(c is None for c in bar_colors):
+                bar_colors = None
+            cap_fig.add_trace(go.Bar(x=cap_group[group_key], y=cap_group["carrier_capacity_kw"], marker_color=bar_colors))
             title = "Installed capacity by technology (kW)" if view_mode == "location" else "Installed capacity by location (kW)"
             cap_fig.update_layout(
                 title=title,
@@ -181,6 +184,8 @@ def register_planning_callbacks(app):
 
             cost_fig = go.Figure()
             base_colors = [resolve_tech_color(label) for label in cost_group[group_key]] if group_key == "technology" else None
+            if base_colors and any(c is None for c in base_colors):
+                base_colors = None
             capex_colors = [_apply_alpha(c, 0.95) for c in base_colors] if base_colors else None
             fixed_colors = [_apply_alpha(c, 0.65) for c in base_colors] if base_colors else None
             var_colors = [_apply_alpha(c, 0.4) for c in base_colors] if base_colors else None
@@ -214,6 +219,8 @@ def register_planning_callbacks(app):
         else:
             co2_fig = go.Figure()
             co2_colors = [resolve_tech_color(label) for label in co2_group[group_key]] if group_key == "technology" else None
+            if co2_colors and any(c is None for c in co2_colors):
+                co2_colors = None
             co2_fig.add_trace(go.Bar(x=co2_group[group_key], y=co2_group["co2_kg"], name="CO2", marker_color=co2_colors))
             co2_fig.update_layout(
                 title="CO2 breakdown (kg)",
