@@ -1,0 +1,12 @@
+name: calliope-dashboard-0610
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - dash=3.2.0
+  - dash-leaflet=1.0.15
+  - plotly=6.3.0
+  - pandas=1.5.3
+  - numpy=1.23.5
+  - xarray=2022.3.0
+  - pytest=8.3

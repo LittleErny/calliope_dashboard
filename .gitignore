@@ -1,5 +1,7 @@
 .idea/
 __pycache__/
+.pytest_cache/
+.coverage
 *.pyc
 *.pyo
 *.pyd

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import pickle
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -16,7 +17,8 @@ from helpers.results_helper import ResultsHelper
 # -----------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-MODEL_DIR = BASE_DIR / "models" / "mainkofen_case_study"
+DEFAULT_MODEL_DIR = BASE_DIR / "models" / "mainkofen_case_study"
+MODEL_DIR = Path(os.environ.get("CALLIOPE_DASHBOARD_MODEL_DIR", DEFAULT_MODEL_DIR)).expanduser().resolve()
 
 INPUTS_PATH = MODEL_DIR / "mainkofen_model_inputs.pkl"
 PLANNING_RESULTS_PATH = MODEL_DIR / "mainkofen_model_results_planning.pkl"
