@@ -1,20 +1,21 @@
-# Calliope 0.6.10 Dashboard
+# Calliope 0.7 Dashboard
 
-This project is a Dash application for inspecting Calliope model inputs, planning results, and operate results.
-This branch supports Calliope 0.6.10 datasets.
+This branch runs the existing Dash application with Calliope `0.7.0.dev7`.
+The Inputs, Planning, and Operate tabs keep the original layout and callback
+structure, while the helper classes read Calliope 0.7's native dimensions and
+variable names.
 
 ## Requirements
 
-- Miniforge or another Conda distribution.
-- Linux, macOS, or Windows.
-- GNU Make is optional. The setup script can also be called directly.
+- Miniforge, Miniconda, or another Conda distribution.
+- GNU Make is recommended, but the setup script can also be run directly.
 
-The dashboard and Calliope model runner use separate environments. Calliope 0.6.10 requires Plotly 3, while the
-dashboard uses Dash 3 and Plotly 6. Keeping the environments separate avoids an invalid dependency combination.
+The project intentionally uses Conda instead of pip requirements or uv. Conda
+installs the Python packages and the CBC solver from the same environment file.
 
 ## Setup
 
-Create both environments with one command:
+Create or update the complete environment with one command:
 
 ```bash
 make setup
@@ -26,54 +27,62 @@ Without Make:
 bash scripts/setup_environments.sh
 ```
 
-The command creates:
+Both commands create `calliope-dashboard-070` from `environment.yml`.
 
-- `calliope-dashboard-0610` for the Dash application and tests.
-- `calliope-model-0610` for Calliope 0.6.10 and CBC.
+## Verify and run
 
-## Run the dashboard
-
-```bash
-make run
-```
-
-The application uses the Mainkofen pickle files in `models/mainkofen_case_study` by default.
-To select another model folder:
-
-```bash
-CALLIOPE_DASHBOARD_MODEL_DIR=/absolute/path/to/model \
-conda run -n calliope-dashboard-0610 python app/app.py
-```
-
-The selected folder must contain:
-
-- `mainkofen_model_inputs.pkl`
-- `mainkofen_model_results_planning.pkl`
-- `mainkofen_model_results_operate.pkl`
-
-## Verify the installation
+Run the dashboard tests and a 24-hour Calliope/CBC solve:
 
 ```bash
 make check
 ```
 
-This runs the dashboard regression tests, verifies CBC, and solves a 24-hour version of the German example model.
+Start the dashboard:
 
-## Regenerate Mainkofen data
+```bash
+make run
+```
+
+Dash prints the local address after startup. Stop it with `Ctrl+C`.
+
+## Dashboard data
+
+The branch includes two solved NetCDF fixtures generated from Calliope's
+built-in `national_scale` example:
+
+- `models/0.7_national_scale/planning.nc`
+- `models/0.7_national_scale/operate.nc`
+
+Regenerate both files with:
 
 ```bash
 make generate
 ```
 
-This runs `models/mainkofen_case_study/calliope_to_pkl.py` in the model environment. The full Mainkofen model
-contains 8760 hourly timesteps and may take some time to solve.
+To display another Calliope 0.7 model, point the application at a folder that
+contains `planning.nc` and `operate.nc`:
+
+```bash
+CALLIOPE_DASHBOARD_MODEL_DIR=/absolute/path/to/model \
+conda run -n calliope-dashboard-070 python app/app.py
+```
+
+Each file must contain Calliope's `inputs`, `results`, and `attrs` NetCDF groups.
+
+## Local Git branches
+
+- `stable/calliope-0.6.10` is the tested Calliope 0.6.10 implementation.
+- `migration/calliope-0.7.0-dev7` is this Calliope 0.7 implementation.
+- `main` remains at the internship version; tag `internship-original` marks the
+  starting commit.
+
+Nothing needs to be pushed to use these local branches. See
+[`docs/branches.md`](docs/branches.md) before merging changes between them.
 
 ## Repository layout
 
-- `app/`: Dash layouts, callbacks, figures, and data loading.
-- `helpers/`: accessors for Calliope 0.6.10 xarray datasets.
-- `models/`: Calliope model definitions, timeseries, and saved outputs.
-- `tests/`: regression and application smoke tests.
-- `docs/`: architecture and environment documentation.
-
-See [docs/architecture.md](docs/architecture.md) and [docs/environments.md](docs/environments.md) for more detail.
+- `app/`: Dash layouts, callbacks, figures, and NetCDF loading.
+- `helpers/`: the Calliope-to-dashboard compatibility boundary.
+- `models/`: model sources and generated dashboard fixtures.
+- `tests/`: data, helper, and Dash smoke tests.
+- `docs/`: branch, architecture, and environment notes.

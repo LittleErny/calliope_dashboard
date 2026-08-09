@@ -1,20 +1,18 @@
 # Helpers
 
-This folder contains helper classes that expose a stable, readable API for Calliope xarray datasets.
+Helpers are the compatibility boundary between Calliope 0.7 xarray datasets
+and the existing dashboard callbacks.
 
-## Files
+- `inputs_helper.py` reads processed model inputs.
+- `results_helper.py` builds planning aggregates and timeseries.
+- `operate_results_helper.py` builds operate aggregates, storage series, and
+  directed views of transmission links.
 
-- `helpers/inputs_helper.py` Accessors for `Model.inputs`.
-- `helpers/results_helper.py` Accessors for planning `Model.results`.
-- `helpers/operate_results_helper.py` Accessors for operate `Model.results`.
+Calliope 0.7 uses separate `nodes`, `techs`, `carriers`, and `timesteps`
+dimensions. Helpers select those dimensions directly and return regular lists,
+dictionaries, pandas Series, or DataFrames. Layouts and callbacks should not
+depend on raw Calliope variable names.
 
-## Responsibilities
-
-- Normalize dataset structures and provide safe access patterns.
-- Convert Calliope indices into convenient Python structures.
-- Provide domain-specific aggregates used by the dashboard.
-
-## Assumptions
-
-- Datasets come from Calliope 0.6.10.
-- Inputs and results are aligned and originate from the same model configuration.
+The old dashboard names such as `energy_cap_max` are retained only in returned
+display dictionaries where callbacks already expect those keys. Internally they
+map to Calliope 0.7 variables such as `flow_cap_max`.

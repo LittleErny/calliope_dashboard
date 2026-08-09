@@ -10,7 +10,5 @@ if ! command -v "${conda_command}" >/dev/null 2>&1; then
 fi
 
 "${conda_command}" env update --file environment.yml --prune --yes
-"${conda_command}" env update --file environment-model.yml --prune --yes
 
-echo "Dashboard environment: calliope-dashboard-0610"
-echo "Model environment:     calliope-model-0610"
+echo "Dashboard environment: calliope-dashboard-070"

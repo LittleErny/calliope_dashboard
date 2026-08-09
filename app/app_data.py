@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import math
 import os
-import pickle
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pandas as pd
+import xarray as xr
 
 from helpers.inputs_helper import InputsHelper
 from helpers.operate_results_helper import OperateResultsHelper
@@ -17,42 +17,30 @@ from helpers.results_helper import ResultsHelper
 # -----------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL_DIR = BASE_DIR / "models" / "mainkofen_case_study"
+DEFAULT_MODEL_DIR = BASE_DIR / "models" / "0.7_national_scale"
 MODEL_DIR = Path(os.environ.get("CALLIOPE_DASHBOARD_MODEL_DIR", DEFAULT_MODEL_DIR)).expanduser().resolve()
 
-INPUTS_PATH = MODEL_DIR / "mainkofen_model_inputs.pkl"
-PLANNING_RESULTS_PATH = MODEL_DIR / "mainkofen_model_results_planning.pkl"
-OPERATE_RESULTS_PATH = MODEL_DIR / "mainkofen_model_results_operate.pkl"
+PLANNING_PATH = MODEL_DIR / "planning.nc"
+OPERATE_PATH = MODEL_DIR / "operate.nc"
 
 
-def _load_pickle(path: Path, label: str):
+def _load_netcdf_group(path: Path, group: str) -> xr.Dataset:
     if not path.exists():
-        raise FileNotFoundError(f"{label} pickle not found: {path}")
-    with open(path, "rb") as f:
-        return pickle.load(f)
+        raise FileNotFoundError(f"Calliope NetCDF file not found: {path}")
+    with xr.open_dataset(path, group=group, engine="h5netcdf") as dataset:
+        return dataset.load()
 
 
-def _read_model_name_from_pickle(inputs) -> Optional[str]:
-    if inputs is None or not hasattr(inputs, "attrs"):
+def _read_metadata_value(metadata: xr.Dataset, section: str, key: str) -> Optional[str]:
+    """Read one scalar from a YAML string stored in Calliope's attrs group."""
+    raw_value = metadata.attrs.get(section)
+    if not isinstance(raw_value, str):
         return None
-    cfg = inputs.attrs.get("model_config")
-    if isinstance(cfg, dict):
-        try:
-            model = cfg.get("model") or {}
-            name = model.get("name") if isinstance(model, dict) else None
-            return str(name) if name else None
-        except Exception:
-            return None
-    if isinstance(cfg, str):
-        for raw in cfg.splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("name:"):
-                value = line.split(":", 1)[1].strip()
-                if value.startswith(("'", "\"")) and value.endswith(("'", "\"")):
-                    value = value[1:-1]
-                return value or None
+    for raw_line in raw_value.splitlines():
+        line = raw_line.strip()
+        if line.startswith(f"{key}:"):
+            value = line.split(":", 1)[1].strip().strip("'\"")
+            return value or None
     return None
 
 
@@ -60,7 +48,12 @@ def _read_model_name_from_pickle(inputs) -> Optional[str]:
 # Real Inputs data (Calliope)
 # -----------------------------
 
-LOADED_INPUTS = _load_pickle(INPUTS_PATH, "Calliope inputs")
+LOADED_INPUTS = _load_netcdf_group(PLANNING_PATH, "inputs")
+LOADED_METADATA = _load_netcdf_group(PLANNING_PATH, "attrs")
+CALLIOPE_VERSION = _read_metadata_value(
+    LOADED_METADATA, "runtime", "calliope_version_initialised"
+)
+LOADED_INPUTS.attrs["calliope_version"] = CALLIOPE_VERSION
 
 INPUT_HELPER = InputsHelper(LOADED_INPUTS)
 
@@ -99,7 +92,8 @@ INPUT_T = len(INPUT_TIMESTEPS)
 # Real Results data (Calliope)
 # -----------------------------
 
-LOADED_RESULTS = _load_pickle(PLANNING_RESULTS_PATH, "Calliope planning results")
+LOADED_RESULTS = _load_netcdf_group(PLANNING_PATH, "results")
+LOADED_RESULTS.attrs["calliope_version"] = CALLIOPE_VERSION
 
 RESULTS_HELPER = ResultsHelper(LOADED_RESULTS, LOADED_INPUTS)
 
@@ -126,9 +120,12 @@ DEFAULT_CARRIER = CARRIER_OPTIONS[0] if CARRIER_OPTIONS else None
 # Real Results data (Operate mode)
 # -----------------------------
 
-LOADED_OPERATE_RESULTS = _load_pickle(OPERATE_RESULTS_PATH, "Calliope operate results")
+LOADED_OPERATE_RESULTS = _load_netcdf_group(OPERATE_PATH, "results")
+LOADED_OPERATE_RESULTS.attrs["calliope_version"] = CALLIOPE_VERSION
+LOADED_OPERATE_INPUTS = _load_netcdf_group(OPERATE_PATH, "inputs")
+LOADED_OPERATE_INPUTS.attrs["calliope_version"] = CALLIOPE_VERSION
 
-OPERATE_HELPER = OperateResultsHelper(LOADED_OPERATE_RESULTS, LOADED_INPUTS)
+OPERATE_HELPER = OperateResultsHelper(LOADED_OPERATE_RESULTS, LOADED_OPERATE_INPUTS)
 OPERATE_TIMESTEPS = OPERATE_HELPER.get_timesteps_datetime()
 OPERATE_T = len(OPERATE_TIMESTEPS)
 OPERATE_CARRIERS = OPERATE_HELPER.get_carriers()
@@ -138,11 +135,11 @@ OPERATE_CONNECTIONS = OPERATE_HELPER.get_physical_lines()
 # Model metadata
 # -----------------------------
 
-MODEL_NAME = _read_model_name_from_pickle(LOADED_INPUTS)
+MODEL_NAME = _read_metadata_value(LOADED_METADATA, "config", "name")
 
 
 def get_model_name() -> Optional[str]:
-    return MODEL_NAME or _read_model_name_from_pickle(LOADED_INPUTS)
+    return MODEL_NAME
 
 # -----------------------------
 # Map geometry helpers shared across tabs

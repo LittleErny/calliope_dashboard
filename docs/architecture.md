@@ -2,37 +2,47 @@
 
 ## Data flow
 
-The dashboard has three layers:
+The application keeps the original three-layer structure:
 
-1. `models/*/calliope_to_pkl.py` runs Calliope and stores xarray datasets.
-2. `helpers/` extracts locations, technologies, carriers, costs, and timeseries from those datasets.
-3. `app/` renders the extracted data with Dash, Plotly, and Dash Leaflet.
+1. `models/0.7_national_scale/calliope_to_netcdf.py` solves planning and
+   operate models and writes NetCDF files.
+2. `helpers/` translates Calliope arrays into the small Python and pandas
+   structures expected by the dashboard.
+3. `app/` renders maps, charts, cards, and tables with Dash.
 
-The Dash callbacks do not run an optimisation model. They only call helper methods and build figures.
+Dash callbacks do not run an optimisation. They only read the datasets loaded
+at application startup.
 
-## Saved datasets
+## NetCDF files
 
-The 0.6.10 dashboard uses three pickle files:
+Calliope 0.7 writes one file per solved model with three groups:
 
-- inputs from `model.inputs`;
-- planning results from `model.results`;
-- operate results from a second model run.
+- `inputs`: processed model configuration and timeseries;
+- `results`: planning or operate solution arrays;
+- `attrs`: serialized configuration, runtime metadata, and solver status.
 
-Pickle files must only be loaded from a trusted source. Pickle is also sensitive to Python and xarray version
-changes, which is why the dashboard environment pins its scientific dependencies.
+The application loads every group into memory and closes the file handle. It
+uses the `h5netcdf` reader to avoid keeping native NetCDF handles open during
+Dash callbacks.
 
-## Configuration
+## Calliope 0.7 dimensions
 
-`app/app_data.py` loads a model folder when the application starts. The default folder is
-`models/mainkofen_case_study`.
+Calliope 0.7 stores `nodes`, `techs`, and `carriers` as separate dimensions.
+The previous 0.6 implementation encoded combinations such as
+`location::technology::carrier` in a single coordinate. Helpers now select the
+separate dimensions directly, but their public methods remain stable so the
+layouts and callbacks do not need a broad rewrite.
 
-Set `CALLIOPE_DASHBOARD_MODEL_DIR` to use another absolute model folder. Keeping this setting outside the Python
-source avoids editing `app_data.py` for every model.
+Important variable mappings are documented in
+[`calliope-input-docs.md`](../calliope-input-docs.md),
+[`calliope-results-docs.md`](../calliope-results-docs.md), and
+[`calliope-operate-results-docs.md`](../calliope-operate-results-docs.md).
 
-## Version boundary
+## Configuration boundary
 
-The helper classes are the compatibility boundary between Calliope and the Dash application. Code in layouts and
-callbacks should use helper methods instead of reading Calliope arrays directly.
+`app/app_data.py` reads `CALLIOPE_DASHBOARD_MODEL_DIR`. The default is
+`models/0.7_national_scale`. A custom directory must contain both
+`planning.nc` and `operate.nc` produced by the same Calliope model family.
 
-Calliope 0.7 uses a different set of dimensions and variables. Its implementation lives on the
-`migration/calliope-0.7.0-dev7` branch and keeps the same layout and callback structure where practical.
+The helper classes are the version boundary. Code in layouts and callbacks
+should call helper methods instead of reading xarray variables directly.

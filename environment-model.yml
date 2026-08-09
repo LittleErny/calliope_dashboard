@@ -1,7 +1,0 @@
-name: calliope-model-0610
-channels:
-  - conda-forge
-dependencies:
-  - python=3.9
-  - calliope=0.6.10
-  - coin-or-cbc=2.10

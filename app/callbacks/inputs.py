@@ -121,11 +121,12 @@ def register_inputs_callbacks(app):
             carriers = app_data.INPUT_HELPER.get_location_carriers(city_name)
             if not carriers:
                 return default_inputs_panel(), None
+            area_text = f"Location area: {area}" if np.isfinite(area) else "Location area: not specified"
 
             return (
                 [
-                    html.H3(f"{city_name}, Germany"),
-                    html.P(f"Location area: {area}"),
+                    html.H3(city_name),
+                    html.P(area_text),
                     html.Div(
                         id="inputs-techs-list",
                         style={"marginTop": "20px", "overflowY": "auto", "flex": "1"},
