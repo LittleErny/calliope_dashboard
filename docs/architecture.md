@@ -4,7 +4,7 @@
 
 The application keeps the original three-layer structure:
 
-1. `models/0.7_national_scale/calliope_to_netcdf.py` solves planning and
+1. `models/1_german_scale/calliope_to_netcdf.py` solves planning and
    operate models and writes NetCDF files.
 2. `helpers/` translates Calliope arrays into the small Python and pandas
    structures expected by the dashboard.
@@ -41,7 +41,7 @@ Important variable mappings are documented in
 ## Configuration boundary
 
 `app/app_data.py` reads `CALLIOPE_DASHBOARD_MODEL_DIR`. The default is
-`models/0.7_national_scale`. A custom directory must contain both
+`models/1_german_scale`. A custom directory must contain both
 `planning.nc` and `operate.nc` produced by the same Calliope model family.
 
 The helper classes are the version boundary. Code in layouts and callbacks

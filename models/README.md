@@ -5,8 +5,8 @@ Each dashboard model folder contains two solved Calliope 0.7 files:
 - `planning.nc`: planning inputs, results, and metadata;
 - `operate.nc`: operate inputs, results, and metadata.
 
-The default `0.7_national_scale` folder uses Calliope's built-in example and
-includes a small generator script. Run it through the project environment:
+The default `1_german_scale` folder contains the fictional German-scale model
+and its generator script. Run it through the project environment:
 
 ```bash
 make generate

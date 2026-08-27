@@ -1,29 +1,32 @@
-import:  # Import other files from paths relative to this file, or absolute paths
-    - 'model_config/techs.yaml'
-    - 'model_config/locations.yaml'
-    - 'scenarios.yaml'
+import:
+  - model_config/techs.yaml
+  - model_config/locations.yaml
+  - scenarios.yaml
 
-model:
+config:
+  init:
     name: Fictional Germany model
-
-    # What version of Calliope this model is intended for
-    calliope_version: 0.6.10
-
-    # Time series data path - can either be a path relative to this file, or an absolute path
-    timeseries_data_path: 'timeseries_data'
-
-    subset_time: ['2025-07-01', '2025-07-14']  # Subset of timesteps
-
-run:
-    mode: plan  # Choices: plan, operate
-
+    calliope_version: 0.7.0
+    subset:
+      timesteps: ["2025-07-01", "2025-07-14"]
+    broadcast_input_data: true
+    distance_unit: m
+    mode: base
+  build:
+    ensure_feasibility: true
+  solve:
     solver: cbc
+    zero_threshold: 1e-10
 
-    ensure_feasibility: true  # Switching on unmet demand
+data_definitions:
+  objective_cost_weights:
+    data: [1, 0.1]
+    index: [monetary, co2]
+    dims: costs
+  bigM: 1e8
 
-    bigM: 1e8  # setting the scale of unmet demand, which cannot be too high, otherwise the optimisation will not converge
-
-    objective_options:
-        cost_class:
-            monetary: 1
-            co2: 0.1
+data_tables:
+  time_varying_parameters:
+    data: german_timeseries
+    rows: timesteps
+    columns: [nodes, techs, parameters]

@@ -7,7 +7,7 @@ variable names.
 
 ## Requirements
 
-- Miniforge, Miniconda, or another Conda distribution.
+- Miniforge, Miniconda, or another Conda distribution with Conda `26.5.3`.
 - GNU Make is recommended, but the setup script can also be run directly.
 
 The project intentionally uses Conda instead of pip requirements or uv. Conda
@@ -47,11 +47,11 @@ Dash prints the local address after startup. Stop it with `Ctrl+C`.
 
 ## Dashboard data
 
-The branch includes two solved NetCDF fixtures generated from Calliope's
-built-in `national_scale` example:
+The branch includes two solved NetCDF fixtures generated from the fictional
+German-scale model:
 
-- `models/0.7_national_scale/planning.nc`
-- `models/0.7_national_scale/operate.nc`
+- `models/1_german_scale/planning.nc`
+- `models/1_german_scale/operate.nc`
 
 Regenerate both files with:
 

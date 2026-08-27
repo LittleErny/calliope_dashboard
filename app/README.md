@@ -13,7 +13,7 @@ it does not run the optimisation model.
 
 ## Data selection
 
-The default folder is `models/0.7_national_scale`. Override it without editing
+The default folder is `models/1_german_scale`. Override it without editing
 Python source:
 
 ```bash

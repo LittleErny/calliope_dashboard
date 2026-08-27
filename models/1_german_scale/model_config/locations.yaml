@@ -1,237 +1,78 @@
-locations:
+nodes:
   Berlin:
-    coordinates:
-      lat: 52.52
-      lon: 13.405
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 9520000
-          resource: file=Berlin_timeseries.csv:pv
-      wind:
-        constraints:
-          energy_cap_max: 15470000
-          resource: file=Berlin_timeseries.csv:wind
-      coal:
-        constraints:
-          energy_cap_max: 5525000
-      storage_tech:
-        constraints:
-          energy_cap_max: 100000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Berlin_timeseries.csv:demand
+    latitude: 52.52
+    longitude: 13.405
     available_area: 60000000
+    techs:
+      pv: {flow_cap_max: 9520000}
+      wind: {flow_cap_max: 15470000}
+      coal: {flow_cap_max: 5525000}
+      storage: {flow_cap_max: 100000}
+      demand:
   Hamburg:
-    coordinates:
-      lat: 53.5511
-      lon: 9.9937
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 3360000
-          resource: file=Hamburg_timeseries.csv:pv
-      wind:
-        constraints:
-          energy_cap_max: 4200000
-          resource: file=Hamburg_timeseries.csv:wind
-      hydro:
-        constraints:
-          energy_cap_max: 80000
-          energy_cap_min: 10000
-          resource: file=Hamburg_timeseries.csv:hydro
-      storage_tech:
-        constraints:
-          energy_cap_max: 75000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Hamburg_timeseries.csv:demand
+    latitude: 53.5511
+    longitude: 9.9937
     available_area: 8000000
+    techs:
+      pv: {flow_cap_max: 3360000}
+      wind: {flow_cap_max: 4200000}
+      hydro: {flow_cap_max: 80000, flow_cap_min: 10000}
+      storage: {flow_cap_max: 75000}
+      demand:
   Munich:
-    coordinates:
-      lat: 48.1351
-      lon: 11.582
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 3570000
-          resource: file=Munich_timeseries.csv:pv
-      hydro:
-        constraints:
-          energy_cap_max: 136000
-          energy_cap_min: 10000
-          resource: file=Munich_timeseries.csv:hydro
-      gas:
-        constraints:
-          energy_cap_max: 1606500
-      storage_tech:
-        constraints:
-          energy_cap_max: 100000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Munich_timeseries.csv:demand
+    latitude: 48.1351
+    longitude: 11.582
     available_area: 9000000
+    techs:
+      pv: {flow_cap_max: 3570000}
+      hydro: {flow_cap_max: 136000, flow_cap_min: 10000}
+      gas: {flow_cap_max: 1606500}
+      storage: {flow_cap_max: 100000}
+      demand:
   Cologne:
-    coordinates:
-      lat: 50.9375
-      lon: 6.9603
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 1338750
-          resource: file=Cologne_timeseries.csv:pv
-      wind:
-        constraints:
-          energy_cap_max: 595000
-          resource: file=Cologne_timeseries.csv:wind
-      coal:
-        constraints:
-          energy_cap_max: 1870000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Cologne_timeseries.csv:demand
+    latitude: 50.9375
+    longitude: 6.9603
     available_area: 8000000
+    techs:
+      pv: {flow_cap_max: 1338750}
+      wind: {flow_cap_max: 595000}
+      coal: {flow_cap_max: 1870000}
+      demand:
   Frankfurt:
-    coordinates:
-      lat: 50.1109
-      lon: 8.6821
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 1115625
-          resource: file=Frankfurt_timeseries.csv:pv
-      gas:
-        constraints:
-          energy_cap_max: 1275000
-      storage_tech:
-        constraints:
-          energy_cap_max: 50000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Frankfurt_timeseries.csv:demand
+    latitude: 50.1109
+    longitude: 8.6821
     available_area: 5000000
+    techs:
+      pv: {flow_cap_max: 1115625}
+      gas: {flow_cap_max: 1275000}
+      storage: {flow_cap_max: 50000}
+      demand:
   Leipzig:
-    coordinates:
-      lat: 51.3397
-      lon: 12.3731
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 714000
-          resource: file=Leipzig_timeseries.csv:pv
-      wind:
-        constraints:
-          energy_cap_max: 952000
-          resource: file=Leipzig_timeseries.csv:wind
-      coal:
-        constraints:
-          energy_cap_max: 1275000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Leipzig_timeseries.csv:demand
+    latitude: 51.3397
+    longitude: 12.3731
     available_area: 5000000
+    techs:
+      pv: {flow_cap_max: 714000}
+      wind: {flow_cap_max: 952000}
+      coal: {flow_cap_max: 1275000}
+      demand:
   Hannover:
-    coordinates:
-      lat: 52.3759
-      lon: 9.732
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 327250
-          resource: file=Hannover_timeseries.csv:pv
-      wind:
-        constraints:
-          energy_cap_max: 595000
-          resource: file=Hannover_timeseries.csv:wind
-      gas:
-        constraints:
-          energy_cap_max: 1020000
-      storage_tech:
-        constraints:
-          energy_cap_max: 40000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Hannover_timeseries.csv:demand
+    latitude: 52.3759
+    longitude: 9.732
     available_area: 4000000
+    techs:
+      pv: {flow_cap_max: 327250}
+      wind: {flow_cap_max: 595000}
+      gas: {flow_cap_max: 1020000}
+      storage: {flow_cap_max: 40000}
+      demand:
   Nuremberg:
-    coordinates:
-      lat: 49.4521
-      lon: 11.0767
-    techs:
-      pv:
-        constraints:
-          energy_cap_max: 1428000
-          resource: file=Nuremberg_timeseries.csv:pv
-      hydro:
-        constraints:
-          energy_cap_max: 54400
-          energy_cap_min: 8000
-          resource: file=Nuremberg_timeseries.csv:hydro
-      gas:
-        constraints:
-          energy_cap_max: 1020000
-      storage_tech:
-        constraints:
-          energy_cap_max: 30000
-      transmission_tech: {}
-      demand_tech:
-        constraints:
-          resource: file=Nuremberg_timeseries.csv:demand
+    latitude: 49.4521
+    longitude: 11.0767
     available_area: 4000000
-links:
-  Berlin,Leipzig:
     techs:
-      transmission_tech:
-        distance: 149000
-        constraints:
-          one_way: true
-          energy_cap_max: 800000
-  Berlin,Hannover:
-    techs:
-      transmission_tech:
-        distance: 249000
-        constraints:
-          energy_cap_max: 1000000
-  Hannover,Hamburg:
-    techs:
-      transmission_tech:
-        constraints:
-          one_way: true
-          energy_cap_max: 900000
-  Cologne,Frankfurt:
-    techs:
-      transmission_tech:
-        distance: 153000
-        constraints:
-          one_way: true
-          energy_cap_max: 850000
-  Frankfurt,Nuremberg:
-    techs:
-      transmission_tech:
-        constraints:
-          energy_cap_max: 700000
-  Leipzig,Hannover:
-    techs:
-      transmission_tech:
-        constraints:
-          one_way: true
-          energy_cap_max: 600000
-  Munich,Nuremberg:
-    techs:
-      transmission_tech:
-        distance: 151000
-        constraints:
-          energy_cap_max: 900000
-  Cologne,Hannover:
-    techs:
-      transmission_tech:
-        distance: 249000
-        constraints:
-          energy_cap_max: 750000
+      pv: {flow_cap_max: 1428000}
+      hydro: {flow_cap_max: 54400, flow_cap_min: 8000}
+      gas: {flow_cap_max: 1020000}
+      storage: {flow_cap_max: 30000}
+      demand:

@@ -7,7 +7,7 @@ from figures import APP_BG
 
 
 def layout_header() -> html.Div:
-    title = "Calliope Dashboard"
+    title = "Calliope Dashboard (Calliope 0.7.0.dev7)"
     model_name = app_data.get_model_name()
     if model_name:
         title = f"{title} - {model_name}"

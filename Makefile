@@ -15,7 +15,7 @@ check-model:
 check: test check-model
 
 run:
-	$(CONDA_COMMAND) run -n $(DASHBOARD_ENV) python app/app.py
+	$(CONDA_COMMAND) run --no-capture-output -n $(DASHBOARD_ENV) python app/app.py
 
 generate:
-	$(CONDA_COMMAND) run -n $(DASHBOARD_ENV) python models/0.7_national_scale/calliope_to_netcdf.py
+	$(CONDA_COMMAND) run -n $(DASHBOARD_ENV) python models/1_german_scale/calliope_to_netcdf.py

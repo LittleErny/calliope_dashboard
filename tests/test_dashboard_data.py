@@ -9,7 +9,7 @@ from helpers.operate_results_helper import OperateResultsHelper
 from helpers.results_helper import ResultsHelper
 
 
-MODEL_DIR = Path(__file__).resolve().parents[1] / "models" / "0.7_national_scale"
+MODEL_DIR = Path(__file__).resolve().parents[1] / "models" / "1_german_scale"
 CALLIOPE_VERSION = "0.7.0.dev7"
 
 
@@ -20,43 +20,45 @@ def _load(path: Path, group: str) -> xr.Dataset:
     return loaded
 
 
-def test_national_scale_inputs() -> None:
+def test_german_scale_inputs() -> None:
     inputs = _load(MODEL_DIR / "planning.nc", "inputs")
     helper = InputsHelper(inputs)
 
     assert helper.get_locations() == [
-        "region1", "region1_1", "region1_2", "region1_3", "region2"
+        "Berlin", "Cologne", "Frankfurt", "Hamburg",
+        "Hannover", "Leipzig", "Munich", "Nuremberg",
     ]
-    assert helper.get_timesteps_datetime().size == 120
-    assert len(helper.get_transmission_lines()) == 4
-    assert helper.get_location_demand("region1", "power")
+    assert helper.get_timesteps_datetime().size == 336
+    assert len(helper.get_transmission_lines()) == 8
+    assert helper.get_location_demand("Berlin", "electricity")
 
 
-def test_national_scale_planning_results() -> None:
+def test_german_scale_planning_results() -> None:
     inputs = _load(MODEL_DIR / "planning.nc", "inputs")
     results = _load(MODEL_DIR / "planning.nc", "results")
     helper = ResultsHelper(results, inputs)
 
-    assert helper.get_carriers() == ["power"]
+    assert helper.get_carriers() == ["electricity"]
     assert helper.get_technologies() == [
-        "Battery storage", "Combined cycle gas turbine", "Concentrating solar power"
+        "Battery Storage", "Coal Power Plant", "Gas Power Plant",
+        "Hydropower (Dams)", "Solar Photovoltaic Power", "Wind Energy",
     ]
     assert helper.get_plan_assets().built_capacity_kw.sum() > 0
     assert helper.get_plan_energy().energy_kwh.sum() > 0
 
 
-def test_national_scale_operate_results() -> None:
+def test_german_scale_operate_results() -> None:
     inputs = _load(MODEL_DIR / "operate.nc", "inputs")
     results = _load(MODEL_DIR / "operate.nc", "results")
     helper = OperateResultsHelper(results, inputs)
 
-    assert helper.get_timesteps_datetime().size == 240
-    assert helper.get_carriers() == ["power"]
-    assert len(helper.get_physical_lines()) == 3
+    assert helper.get_timesteps_datetime().size == 336
+    assert helper.get_carriers() == ["electricity"]
+    assert len(helper.get_physical_lines()) == 8
     for line_id in helper.get_line_ids():
         assert helper.get_line_capacity(line_id) > 0
-        assert helper.get_line_total_flow(line_id, "power") >= 0
-    assert helper.get_storage_capacity("region2", "battery") > 0
+        assert helper.get_line_total_flow(line_id, "electricity") >= 0
+    assert helper.get_storage_capacity("Berlin", "storage") > 0
 
 
 def test_netcdf_metadata_records_optimal_solutions() -> None:
@@ -76,7 +78,7 @@ def test_dashboard_queries_cover_each_view() -> None:
     for location in app_data.PLAN_LOCATIONS:
         kwargs = {
             "scenario_id": "default",
-            "carrier": "power",
+            "carrier": "electricity",
             "start_ts": start_ts,
             "end_ts": end_ts,
             "view_mode": "location",
@@ -91,7 +93,7 @@ def test_dashboard_queries_cover_each_view() -> None:
     operate = app_data.OPERATE_HELPER
     for location in operate.get_locations():
         kpis = operate.get_location_operate_kpis_window(
-            location, "power", 0, app_data.OPERATE_T - 1
+            location, "electricity", 0, app_data.OPERATE_T - 1
         )
         assert set(kpis) == {
             "total_demand", "total_unmet", "total_production", "total_variable_cost"

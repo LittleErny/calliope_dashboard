@@ -17,7 +17,7 @@ from helpers.results_helper import ResultsHelper
 # -----------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL_DIR = BASE_DIR / "models" / "0.7_national_scale"
+DEFAULT_MODEL_DIR = BASE_DIR / "models" / "1_german_scale"
 MODEL_DIR = Path(os.environ.get("CALLIOPE_DASHBOARD_MODEL_DIR", DEFAULT_MODEL_DIR)).expanduser().resolve()
 
 PLANNING_PATH = MODEL_DIR / "planning.nc"

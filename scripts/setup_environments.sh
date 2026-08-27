@@ -9,6 +9,6 @@ if ! command -v "${conda_command}" >/dev/null 2>&1; then
     exit 1
 fi
 
-"${conda_command}" env update --file environment.yml --prune --yes
+"${conda_command}" env update --file environment.yml --prune
 
 echo "Dashboard environment: calliope-dashboard-070"

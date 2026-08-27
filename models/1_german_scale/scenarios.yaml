@@ -1,170 +1,60 @@
-overrides:
-  hydro_cheaper:
-    techs:
-      hydro:
-        costs:
-          monetary:
-            energy_cap: 500
-            om_prod: 0.0005
-  operate_override:
-    run:
-      mode: operate
-      operation:
-        window: 336
-        horizon: 336
-    locations:
-      Berlin:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 9520000
-          wind:
-            constraints:
-              energy_cap_equals: 15470000
-          coal:
-            constraints:
-              energy_cap_equals: 5525000
-          storage_tech:
-            constraints:
-              energy_cap_equals: 100000
-              storage_cap_equals: 400000
-      Hamburg:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 3360000
-          wind:
-            constraints:
-              energy_cap_equals: 4200000
-          hydro:
-            constraints:
-              energy_cap_equals: 80000
-          storage_tech:
-            constraints:
-              energy_cap_equals: 75000
-              storage_cap_equals: 300000
-      Munich:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 3570000
-          hydro:
-            constraints:
-              energy_cap_equals: 136000
-          gas:
-            constraints:
-              energy_cap_equals: 1606500
-          storage_tech:
-            constraints:
-              energy_cap_equals: 100000
-              storage_cap_equals: 400000
-      Cologne:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 1338750
-          wind:
-            constraints:
-              energy_cap_equals: 595000
-          coal:
-            constraints:
-              energy_cap_equals: 1870000
-      Frankfurt:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 1115625
-          gas:
-            constraints:
-              energy_cap_equals: 1275000
-          storage_tech:
-            constraints:
-              energy_cap_equals: 50000
-              storage_cap_equals: 200000
-      Leipzig:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 714000
-          wind:
-            constraints:
-              energy_cap_equals: 952000
-          coal:
-            constraints:
-              energy_cap_equals: 1275000
-      Hannover:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 327250
-          wind:
-            constraints:
-              energy_cap_equals: 595000
-          gas:
-            constraints:
-              energy_cap_equals: 1020000
-          storage_tech:
-            constraints:
-              energy_cap_equals: 40000
-              storage_cap_equals: 160000
-      Nuremberg:
-        techs:
-          pv:
-            constraints:
-              energy_cap_equals: 1428000
-          hydro:
-            constraints:
-              energy_cap_equals: 54400
-          gas:
-            constraints:
-              energy_cap_equals: 1020000
-          storage_tech:
-            constraints:
-              energy_cap_equals: 30000
-              storage_cap_equals: 120000
-    links:
-      Berlin,Leipzig:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 800000
-      Berlin,Hannover:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 1000000
-      Hannover,Hamburg:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 900000
-      Cologne,Frankfurt:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 850000
-      Frankfurt,Nuremberg:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 700000
-      Leipzig,Hannover:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 600000
-      Munich,Nuremberg:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 900000
-      Cologne,Hannover:
-        techs:
-          transmission_tech:
-            constraints:
-              energy_cap_equals: 750000
 scenarios:
-  hydro_cheaper:
-  - hydro_cheaper
-  operate_fixed:
-  - operate_override
+  operate_fixed: [operate_override]
+
+overrides:
+  operate_override:
+    config:
+      init:
+        mode: operate
+      build:
+        operate:
+          window: 168h
+          horizon: 336h
+    nodes:
+      Berlin.techs:
+        pv.flow_cap: 9520000
+        wind.flow_cap: 15470000
+        coal.flow_cap: 5525000
+        storage: {flow_cap: 100000, storage_cap: 400000}
+      Hamburg.techs:
+        pv.flow_cap: 3360000
+        wind.flow_cap: 4200000
+        hydro.flow_cap: 80000
+        storage: {flow_cap: 75000, storage_cap: 300000}
+      Munich.techs:
+        pv.flow_cap: 3570000
+        hydro.flow_cap: 136000
+        gas.flow_cap: 1606500
+        storage: {flow_cap: 100000, storage_cap: 400000}
+      Cologne.techs:
+        pv.flow_cap: 1338750
+        wind.flow_cap: 595000
+        coal.flow_cap: 1870000
+      Frankfurt.techs:
+        pv.flow_cap: 1115625
+        gas.flow_cap: 1275000
+        storage: {flow_cap: 50000, storage_cap: 200000}
+      Leipzig.techs:
+        pv.flow_cap: 714000
+        wind.flow_cap: 952000
+        coal.flow_cap: 1275000
+      Hannover.techs:
+        pv.flow_cap: 327250
+        wind.flow_cap: 595000
+        gas.flow_cap: 1020000
+        storage: {flow_cap: 40000, storage_cap: 160000}
+      Nuremberg.techs:
+        pv.flow_cap: 1428000
+        hydro.flow_cap: 54400
+        gas.flow_cap: 1020000
+        storage: {flow_cap: 30000, storage_cap: 120000}
+    techs:
+      storage.cyclic_storage: false
+      Berlin_to_Leipzig.flow_cap: 800000
+      Berlin_to_Hannover.flow_cap: 1000000
+      Hannover_to_Hamburg.flow_cap: 900000
+      Cologne_to_Frankfurt.flow_cap: 850000
+      Frankfurt_to_Nuremberg.flow_cap: 700000
+      Leipzig_to_Hannover.flow_cap: 600000
+      Munich_to_Nuremberg.flow_cap: 900000
+      Cologne_to_Hannover.flow_cap: 750000

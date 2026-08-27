@@ -1,179 +1,235 @@
-# Fictional Germany model
-
-tech_groups:
-  supply_power_plus:
-    essentials:
-      parent: supply_plus
-      carrier: electricity
+templates:
+  transmission_line:
+    name: Electricity Transmission
+    color: "#ff0303"
+    base_tech: transmission
+    carrier_in: electricity
+    carrier_out: electricity
+    flow_out_eff: 0.98
+    lifetime: 25
+    cost_interest_rate:
+      data: 0.10
+      index: monetary
+      dims: costs
+    cost_flow_cap_per_distance:
+      data: 0.01
+      index: monetary
+      dims: costs
+    cost_om_annual:
+      data: 5
+      index: monetary
+      dims: costs
 
 techs:
-  # PV Technology
   pv:
-    essentials:
-      name: 'Solar Photovoltaic Power'
-      color: '#F9D956'
-      parent: supply_power_plus
-    constraints:
-      export_carrier: electricity
-      # resource: inf  # Energy resource in kWh/m² (per area)
-      resource_unit: energy_per_cap             # unit of resource is kWh/m²
-      parasitic_eff: 0.85                       # inverter losses: fraction of energy delivered (dimensionless)
-      energy_cap_max: 350_000                   # Max installed PV capacity in kWp (kilowatt peak)
-      resource_area_max: 55_500_000             # Maximum area available for PV in m²
-      force_resource: false                     # there can be situations when we have to turn off the tech partially
-      resource_area_per_energy_cap: 5           # m² of panels per kWp of installed capacity
-      lifetime: 25                              # Lifetime of PV panels in years
-    costs:
-      monetary:
-        interest_rate: 0.10                      # 10% annual financing cost
-        energy_cap: 1350                        # Capital cost per kWp in currency units (€/kWp)
-        om_annual: 15                            # Fixed O&M per kW per year (€/kW/yr)
-        om_prod: 0.002                           # Variable O&M per kWh produced (€/kWh)
-      co2:
-        om_prod: 0.0                             # kg CO2 per kWh produced
+    name: Solar Photovoltaic Power
+    color: "#F9D956"
+    base_tech: supply
+    carrier_out: electricity
+    source_unit: per_cap
+    flow_out_parasitic_eff: 0.85
+    flow_cap_max: 350000
+    lifetime: 25
+    cost_interest_rate:
+      data: 0.10
+      index: monetary
+      dims: costs
+    cost_flow_cap:
+      data: 1350
+      index: monetary
+      dims: costs
+    cost_om_annual:
+      data: 15
+      index: monetary
+      dims: costs
+    cost_flow_out:
+      data: [0.002, 0]
+      index: [monetary, co2]
+      dims: costs
 
-  # Wind Energy Technology
   wind:
-    essentials:
-      name: 'Wind Energy'
-      color: '#6FB8E6'
-      parent: supply_power_plus
-    constraints:
-      export_carrier: electricity
-      # resource: file=wind_resource.csv:per_area   # Energy resource in kWh/m² per year
-      resource_unit: energy_per_cap               # unit of resource is kWh/m²
-      parasitic_eff: 0.90                         # fraction of energy delivered after turbine losses
-      energy_cap_max: 300_000                     # Max installed wind capacity in kWp
-      resource_area_max: 5_000_000                  # Maximum area available for wind turbines in m²
-      force_resource: false
-      resource_area_per_energy_cap: 0.5             # m² of area required per kWp of turbine capacity
-      lifetime: 25                                # Lifetime in years
-    costs:
-      monetary:
-        interest_rate: 0.10                        # Annual interest rate (dimensionless)
-        energy_cap: 1200                           # Capital cost per kWp in €/kWp
-        om_annual: 30                              # Fixed O&M per kW per year (€/kW/yr)
-        om_prod: 0.003                             # Variable O&M per kWh produced (€/kWh)
-      co2:
-        om_prod: 0.0                               # kg CO2 per kWh produced
+    name: Wind Energy
+    color: "#6FB8E6"
+    base_tech: supply
+    carrier_out: electricity
+    source_unit: per_cap
+    flow_out_parasitic_eff: 0.90
+    flow_cap_max: 300000
+    lifetime: 25
+    cost_interest_rate:
+      data: 0.10
+      index: monetary
+      dims: costs
+    cost_flow_cap:
+      data: 1200
+      index: monetary
+      dims: costs
+    cost_om_annual:
+      data: 30
+      index: monetary
+      dims: costs
+    cost_flow_out:
+      data: [0.003, 0]
+      index: [monetary, co2]
+      dims: costs
 
-  # Hydropower Technology
   hydro:
-    essentials:
-      name: 'Hydropower (Dams)'
-      color: '#2E54D1'
-      parent: supply_power_plus
-    constraints:
-      export_carrier: electricity
-      # resource: file=hydro_resource.csv:per_area  # Resource in kWh/m²
-      resource_unit: energy_per_area
-      parasitic_eff: 0.90                         # Fraction of water energy converted to electricity
-      energy_cap_max: 20_000                      # Max installed capacity in kWp
-      resource_area_max: 200_000                  # 0.2 km² water surface (e.g., wide river + reservoir)
-      force_resource: false
-      resource_area_per_energy_cap: 10            # m² required per kWp installed
-      lifetime: 30                                # Lifetime in years
-    costs:
-      monetary:
-        interest_rate: 0.10                        # Financing interest rate (dimensionless)
-        energy_cap: 900                            # Capital cost €/kWp
-        om_annual: 25                              # Fixed O&M per kW per year (€/kW/yr)
-        om_prod: 0.001                             # Variable O&M per kWh produced (€/kWh)
-      co2:
-        om_prod: 0.0                               # kg CO2 per kWh produced
+    name: Hydropower (Dams)
+    color: "#2E54D1"
+    base_tech: supply
+    carrier_out: electricity
+    source_unit: per_area
+    flow_out_parasitic_eff: 0.90
+    flow_cap_max: 20000
+    area_use_max: 200000
+    area_use_per_flow_cap: 10
+    lifetime: 30
+    cost_interest_rate:
+      data: 0.10
+      index: monetary
+      dims: costs
+    cost_flow_cap:
+      data: 900
+      index: monetary
+      dims: costs
+    cost_om_annual:
+      data: 25
+      index: monetary
+      dims: costs
+    cost_flow_out:
+      data: [0.001, 0]
+      index: [monetary, co2]
+      dims: costs
 
-  # Coal Power Plant Technology
   coal:
-    essentials:
-      name: 'Coal Power Plant'
-      color: '#4E4E4E'
-      parent: supply_power_plus
-      carrier: electricity
-    constraints:
-      resource: inf                               # Unlimited coal supply
-      energy_cap_max: 200_000                     # Max installed capacity in kWp for an avg coal plant
-      lifetime: 40                                # Plant lifetime in years
-    costs:
-      monetary:
-        interest_rate: 0.10                        # Annual financing cost
-        energy_cap: 2000                           # Capital cost €/kWp
-        # Variable cost per kWh produced (€/kWh)
-        # Includes O&M (0.01) + fuel (0.07) => 0.08 €/kWh total
-        om_prod: 0.08
-        om_annual: 60                              # Fixed O&M per kW per year (€/kW/yr)
-      co2:
-        om_prod: 0.9                               # kg CO2 per kWh produced
+    name: Coal Power Plant
+    color: "#4E4E4E"
+    base_tech: supply
+    carrier_out: electricity
+    source_use_max: .inf
+    flow_cap_max: 200000
+    lifetime: 40
+    cost_interest_rate:
+      data: 0.10
+      index: monetary
+      dims: costs
+    cost_flow_cap:
+      data: 2000
+      index: monetary
+      dims: costs
+    cost_om_annual:
+      data: 60
+      index: monetary
+      dims: costs
+    cost_flow_out:
+      data: [0.08, 0.9]
+      index: [monetary, co2]
+      dims: costs
 
-  # Gas Power Plant Technology
   gas:
-    essentials:
-      name: 'Gas Power Plant'
-      color: '#D9A15C'
-      parent: supply_power_plus
-      carrier: electricity
-    constraints:
-      resource: inf                               # Unlimited gas supply
-      energy_cap_max: 200_000                     # Max installed capacity in kWp
-      lifetime: 35                                # Lifetime in years
-    costs:
-      monetary:
-        interest_rate: 0.10                        # Annual interest rate
-        energy_cap: 2500                           # Capital cost €/kWp
-        # Variable cost per kWh produced (€/kWh)
-        # Includes O&M (0.01) + fuel (0.05) => 0.06 €/kWh total
-        om_prod: 0.06
-        om_annual: 45                              # Fixed O&M per kW per year (€/kW/yr)
-      co2:
-        om_prod: 0.4                               # kg CO2 per kWh produced
+    name: Gas Power Plant
+    color: "#D9A15C"
+    base_tech: supply
+    carrier_out: electricity
+    source_use_max: .inf
+    flow_cap_max: 200000
+    lifetime: 35
+    cost_interest_rate:
+      data: 0.10
+      index: monetary
+      dims: costs
+    cost_flow_cap:
+      data: 2500
+      index: monetary
+      dims: costs
+    cost_om_annual:
+      data: 45
+      index: monetary
+      dims: costs
+    cost_flow_out:
+      data: [0.06, 0.4]
+      index: [monetary, co2]
+      dims: costs
 
-  # Transmission Technology
-  transmission_tech:
-    essentials:
-      name: 'Electricity Transmission'
-      color: '#ff0303'
-      parent: transmission
-      carrier: electricity
-    constraints:
-      energy_cap_max: 1_500_000                    # Max transmission capacity in kWp
-      energy_eff: 0.98                              # Fraction of energy transmitted without loss
-      lifetime: 25                                  # Lifetime in years
-    costs:
-      monetary:
-        interest_rate: 0.10                          # Financing interest rate
-        energy_cap_per_distance: 0.01               # €/kWp/km of transmission line
-        om_annual: 5                                 # Fixed O&M per kW per year (€/kW/yr)
-      co2:
-        om_prod: 0.0                                 # kg CO2 per kWh transmitted
+  demand:
+    name: Electricity Demand
+    color: "#8B0000"
+    base_tech: demand
+    carrier_in: electricity
 
-  # Demand Technology
-  demand_tech:
-    essentials:
-      name: 'Electricity Demand'
-      color: '#8B0000'
-      parent: demand
-      carrier: electricity
-      # No constraints needed; demand is input in kWh
+  storage:
+    name: Battery Storage
+    color: "#2A9D8F"
+    base_tech: storage
+    carrier_in: electricity
+    carrier_out: electricity
+    flow_cap_max: 100000
+    storage_cap_max: 400000
+    flow_cap_per_storage_cap_max: 4
+    storage_initial: 0.5
+    flow_in_eff: 0.90
+    flow_out_eff: 0.90
+    storage_loss: 0
+    lifetime: 20
+    cost_interest_rate:
+      data: 0.10
+      index: monetary
+      dims: costs
+    cost_flow_cap:
+      data: 500
+      index: monetary
+      dims: costs
+    cost_om_annual:
+      data: 10
+      index: monetary
+      dims: costs
 
-  # Storage Technology
-  storage_tech:
-    essentials:
-      name: 'Battery Storage'
-      color: '#2A9D8F'
-      parent: storage
-      carrier_in: electricity
-      carrier_out: electricity
-    constraints:
-      energy_cap_max: 100_000                        # Max energy discharge in kW
-      storage_cap_max: 400_000                       # Max storage capacity kWh
-      energy_cap_per_storage_cap_max: 4
-      storage_initial: 0.5                           # Start half-charged (fraction of storage cap)
-      energy_eff: 0.90                               # Round-trip efficiency fraction
-      storage_loss: 0                                # No loss over time assumed
-      lifetime: 20                                   # Storage lifetime in years
-    costs:
-      monetary:
-        interest_rate: 0.10                           # Financing rate
-        energy_cap: 500                               # Capital cost €/kWh
-        om_annual: 10                                 # Fixed O&M per kW per year (€/kW/yr)
-      co2:
-        om_prod: 0.0                                   # kg CO2 per kWh discharged
+  Berlin_to_Leipzig:
+    template: transmission_line
+    link_from: Berlin
+    link_to: Leipzig
+    distance: 149000
+    one_way: true
+    flow_cap_max: 800000
+  Berlin_to_Hannover:
+    template: transmission_line
+    link_from: Berlin
+    link_to: Hannover
+    distance: 249000
+    flow_cap_max: 1000000
+  Hannover_to_Hamburg:
+    template: transmission_line
+    link_from: Hannover
+    link_to: Hamburg
+    one_way: true
+    flow_cap_max: 900000
+  Cologne_to_Frankfurt:
+    template: transmission_line
+    link_from: Cologne
+    link_to: Frankfurt
+    distance: 153000
+    one_way: true
+    flow_cap_max: 850000
+  Frankfurt_to_Nuremberg:
+    template: transmission_line
+    link_from: Frankfurt
+    link_to: Nuremberg
+    flow_cap_max: 700000
+  Leipzig_to_Hannover:
+    template: transmission_line
+    link_from: Leipzig
+    link_to: Hannover
+    one_way: true
+    flow_cap_max: 600000
+  Munich_to_Nuremberg:
+    template: transmission_line
+    link_from: Munich
+    link_to: Nuremberg
+    distance: 151000
+    flow_cap_max: 900000
+  Cologne_to_Hannover:
+    template: transmission_line
+    link_from: Cologne
+    link_to: Hannover
+    distance: 249000
+    flow_cap_max: 750000
