@@ -148,7 +148,7 @@ class CalliopeDashboard:
         command = [
             sys.executable,
             "-m",
-            "calliope_dashboard._server",
+            "calliope_dashboard",
             "--model-dir",
             str(data_dir),
             "--host",
