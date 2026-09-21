@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "calliope-pareto-dashboard"
+name = "calliope-dashboard"
 version = "0.1.0"
-description = "Interactive Dash views for Calliope 0.7 models and Pareto solutions"
+description = "Interactive Dash views for Calliope 0.7 model inputs and results"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [

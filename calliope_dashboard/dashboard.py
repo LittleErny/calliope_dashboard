@@ -23,9 +23,9 @@ import xarray as xr
 class CalliopeDashboard:
     """Serve one Calliope solution in a local background dashboard.
 
-    Prefer :meth:`from_pareto` for multi-objective studies. The model factory
-    supplies the inputs and metadata which are intentionally not duplicated in
-    every ``ParetoResult`` solution dataset.
+    The solution may come from any solved Calliope model. ``from_pareto`` is an
+    optional convenience constructor for selecting one multi-objective result.
+    The model factory supplies the corresponding model inputs and metadata.
     """
 
     def __init__(

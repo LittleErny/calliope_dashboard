@@ -1,11 +1,12 @@
-# Calliope Pareto Dashboard
+# Calliope Dashboard
 
-An interactive dashboard for Calliope 0.7 inputs, planning results, operate
-results, and individual solutions selected from a Pareto front.
+An interactive dashboard for exploring Calliope 0.7 model inputs, planning
+results, and operate results.
 
-The dashboard is a viewer: it does not optimise a model. A solved Pareto point
-is selected in Python, exported to a temporary Calliope NetCDF dataset, and
-served locally by Dash.
+The dashboard is a general-purpose viewer: it does not optimise a model and is
+not tied to multi-objective optimisation. It can open an ordinary solved
+Calliope model, an existing NetCDF export, or one selected solution from a
+Pareto study.
 
 ## Quick start
 
@@ -27,7 +28,25 @@ If the correct Calliope environment already exists, install only this checkout:
 python -m pip install --no-deps --editable /path/to/intern-calliope-visualization
 ```
 
-## Open one Pareto point from Python
+## Open a solved Calliope result from Python
+
+The main API accepts any solved Calliope result as an `xarray.Dataset`:
+
+```python
+from calliope_dashboard import CalliopeDashboard
+
+dashboard = CalliopeDashboard(
+    model_factory=my_model_factory,
+    solution=solved_model.results,
+)
+dashboard.start()
+```
+
+`model_factory` recreates the corresponding unsolved model so that its inputs
+and metadata can be combined with the supplied result dataset. No optimisation
+is run by `start()`.
+
+## Open one Pareto point
 
 `model_factory` must create the same unsolved Calliope model configuration used
 for the Pareto study. It supplies model inputs and metadata; the selected
@@ -45,7 +64,8 @@ dashboard = CalliopeDashboard.from_pareto(
 url = dashboard.start()  # prints and returns http://127.0.0.1:8050
 ```
 
-No optimisation is run by `start()`. When finished:
+This is an optional convenience adapter around the same general dashboard API.
+When finished:
 
 ```python
 dashboard.stop()
@@ -65,18 +85,6 @@ with CalliopeDashboard.from_pareto(
 Use `port=8051` when port 8050 is already occupied. Pass `data_dir=...` if the
 generated `planning.nc`, `operate.nc`, and `selection.json` should be kept;
 otherwise a temporary directory is used.
-
-## Open any solved Calliope result
-
-The lower-level constructor accepts an `xarray.Dataset` directly:
-
-```python
-dashboard = CalliopeDashboard(
-    model_factory=my_model_factory,
-    solution=solved_model.results,
-)
-dashboard.start()
-```
 
 ## Open an existing NetCDF export
 

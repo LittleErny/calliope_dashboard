@@ -14,7 +14,13 @@ The application uses four small layers:
 Neither the public API nor Dash callbacks run an optimisation. They only select
 an existing solution and read the datasets loaded at application startup.
 
-## Pareto integration
+## Solution sources
+
+The dashboard's core input is one Calliope-compatible solution dataset. It may
+come directly from a normally solved model, from an existing NetCDF export, or
+from another workflow that produces compatible results.
+
+### Optional Pareto integration
 
 `ParetoResult.solution(point_id)` contains the full result dataset but does not
 duplicate model inputs for every point. `CalliopeDashboard.from_pareto(...)`
