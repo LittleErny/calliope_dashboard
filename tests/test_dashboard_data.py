@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import xarray as xr
 
 from helpers.inputs_helper import InputsHelper
 from helpers.operate_results_helper import OperateResultsHelper
-from helpers.results_helper import ResultsHelper
+from helpers.results_helper import ALL_LOCATIONS, ResultsHelper
 
 
 MODEL_DIR = Path(__file__).resolve().parents[1] / "models" / "1_german_scale"
@@ -69,7 +70,7 @@ def test_netcdf_metadata_records_optimal_solutions() -> None:
 
 
 def test_dashboard_queries_cover_each_view() -> None:
-    import app_data
+    from app import app_data
 
     start_ts = app_data.TIME_INDEX[0]
     end_ts = app_data.TIME_INDEX[-1]
@@ -89,6 +90,26 @@ def test_dashboard_queries_cover_each_view() -> None:
             "capacity", "capex", "opex", "production", "co2_kg"
         }
         assert "Name" in helper.get_plan_detail_table(**kwargs).columns
+
+    all_locations = {
+        "scenario_id": "default",
+        "carrier": "electricity",
+        "start_ts": start_ts,
+        "end_ts": end_ts,
+        "view_mode": "location",
+        "selected_location": ALL_LOCATIONS,
+        "selected_tech": None,
+    }
+    all_kpis = helper.get_plan_kpis(**all_locations)
+    location_capacity = sum(
+        helper.get_plan_kpis(
+            **{**all_locations, "selected_location": location}
+        )["capacity"]
+        for location in app_data.PLAN_LOCATIONS
+    )
+    assert all_kpis["capacity"] == pytest.approx(location_capacity)
+    assert helper.get_plan_production_timeseries(**all_locations).group_label.nunique() > 1
+    assert helper.get_plan_demand_timeseries(**all_locations).demand_kwh.sum() > 0
 
     operate = app_data.OPERATE_HELPER
     for location in operate.get_locations():

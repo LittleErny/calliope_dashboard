@@ -2,16 +2,27 @@
 
 ## Data flow
 
-The application keeps the original three-layer structure:
+The application uses four small layers:
 
-1. `models/1_german_scale/calliope_to_netcdf.py` solves planning and
-   operate models and writes NetCDF files.
-2. `helpers/` translates Calliope arrays into the small Python and pandas
+1. `calliope_dashboard.CalliopeDashboard` selects a solution, combines it with
+   the inputs from a model factory, and owns the local server lifecycle.
+2. NetCDF is the stable hand-off between Calliope and the web process.
+3. `helpers/` translates Calliope arrays into the small Python and pandas
    structures expected by the dashboard.
-3. `app/` renders maps, charts, cards, and tables with Dash.
+4. `app/` renders maps, charts, cards, and tables with Dash.
 
-Dash callbacks do not run an optimisation. They only read the datasets loaded
-at application startup.
+Neither the public API nor Dash callbacks run an optimisation. They only select
+an existing solution and read the datasets loaded at application startup.
+
+## Pareto integration
+
+`ParetoResult.solution(point_id)` contains the full result dataset but does not
+duplicate model inputs for every point. `CalliopeDashboard.from_pareto(...)`
+therefore also accepts the study's model factory. It creates an unsolved model,
+attaches the selected result, and calls Calliope's own `to_netcdf` exporter.
+
+The server runs in a subprocess. This keeps `app_data` immutable for the life of
+one dashboard and allows notebook code to stop or replace the view explicitly.
 
 ## NetCDF files
 
@@ -40,9 +51,10 @@ Important variable mappings are documented in
 
 ## Configuration boundary
 
-`app/app_data.py` reads `CALLIOPE_DASHBOARD_MODEL_DIR`. The default is
-`models/1_german_scale`. A custom directory must contain both
-`planning.nc` and `operate.nc` produced by the same Calliope model family.
+The command-line layer sets `CALLIOPE_DASHBOARD_MODEL_DIR` before importing
+`app/app_data.py`. The default is `models/1_german_scale`. A custom directory
+must contain both `planning.nc` and `operate.nc` produced by the same Calliope
+model family.
 
 The helper classes are the version boundary. Code in layouts and callbacks
 should call helper methods instead of reading xarray variables directly.

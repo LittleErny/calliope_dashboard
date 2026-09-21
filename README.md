@@ -1,88 +1,116 @@
-# Calliope 0.7 Dashboard
+# Calliope Pareto Dashboard
 
-This branch runs the existing Dash application with Calliope `0.7.0.dev7`.
-The Inputs, Planning, and Operate tabs keep the original layout and callback
-structure, while the helper classes read Calliope 0.7's native dimensions and
-variable names.
+An interactive dashboard for Calliope 0.7 inputs, planning results, operate
+results, and individual solutions selected from a Pareto front.
 
-## Requirements
+The dashboard is a viewer: it does not optimise a model. A solved Pareto point
+is selected in Python, exported to a temporary Calliope NetCDF dataset, and
+served locally by Dash.
 
-- Miniforge, Miniconda, or another Conda distribution with Conda `26.5.3`.
-- GNU Make is recommended, but the setup script can also be run directly.
+## Quick start
 
-The project intentionally uses Conda instead of pip requirements or uv. Conda
-installs the Python packages and the CBC solver from the same environment file.
-
-## Setup
-
-Create or update the complete environment with one command:
+The reproducible environment includes Calliope `0.7.0.dev7`, CBC, Dash, and the
+dashboard package:
 
 ```bash
 make setup
-```
-
-Without Make:
-
-```bash
-bash scripts/setup_environments.sh
-```
-
-Both commands create `calliope-dashboard-070` from `environment.yml`.
-
-## Verify and run
-
-Run the dashboard tests and a 24-hour Calliope/CBC solve:
-
-```bash
 make check
-```
-
-Start the dashboard:
-
-```bash
 make run
 ```
 
-Dash prints the local address after startup. Stop it with `Ctrl+C`.
+`make run` opens the included German-scale example. The terminal prints the
+local address; stop the server with `Ctrl+C`.
 
-## Dashboard data
-
-The branch includes two solved NetCDF fixtures generated from the fictional
-German-scale model:
-
-- `models/1_german_scale/planning.nc`
-- `models/1_german_scale/operate.nc`
-
-Regenerate both files with:
+If the correct Calliope environment already exists, install only this checkout:
 
 ```bash
-make generate
+python -m pip install --no-deps --editable /path/to/intern-calliope-visualization
 ```
 
-To display another Calliope 0.7 model, point the application at a folder that
-contains `planning.nc` and `operate.nc`:
+## Open one Pareto point from Python
+
+`model_factory` must create the same unsolved Calliope model configuration used
+for the Pareto study. It supplies model inputs and metadata; the selected
+`ParetoResult` supplies the solved result arrays.
+
+```python
+from calliope_dashboard import CalliopeDashboard
+
+dashboard = CalliopeDashboard.from_pareto(
+    result=weighted_sum_result,
+    point_id=8,
+    model_factory=thd_co2_model,
+)
+
+url = dashboard.start()  # prints and returns http://127.0.0.1:8050
+```
+
+No optimisation is run by `start()`. When finished:
+
+```python
+dashboard.stop()
+```
+
+The class is also a context manager:
+
+```python
+with CalliopeDashboard.from_pareto(
+    result=weighted_sum_result,
+    point_id=8,
+    model_factory=thd_co2_model,
+) as dashboard:
+    print(dashboard.url)
+```
+
+Use `port=8051` when port 8050 is already occupied. Pass `data_dir=...` if the
+generated `planning.nc`, `operate.nc`, and `selection.json` should be kept;
+otherwise a temporary directory is used.
+
+## Open any solved Calliope result
+
+The lower-level constructor accepts an `xarray.Dataset` directly:
+
+```python
+dashboard = CalliopeDashboard(
+    model_factory=my_model_factory,
+    solution=solved_model.results,
+)
+dashboard.start()
+```
+
+## Open an existing NetCDF export
+
+The directory must contain compatible `planning.nc` and `operate.nc` files with
+Calliope's `inputs`, `results`, and `attrs` groups:
 
 ```bash
-CALLIOPE_DASHBOARD_MODEL_DIR=/absolute/path/to/model \
-conda run -n calliope-dashboard-070 python app/app.py
+calliope-dashboard \
+  --model-dir /absolute/path/to/dashboard-data \
+  --default-tab results_planning
 ```
 
-Each file must contain Calliope's `inputs`, `results`, and `attrs` NetCDF groups.
+## Planning views
 
-## Local Git branches
+Planning mode supports three perspectives:
 
-- `stable/calliope-0.6.10` is the tested Calliope 0.6.10 implementation.
-- `migration/calliope-0.7.0-dev7` is this Calliope 0.7 implementation.
-- `main` remains at the internship version; tag `internship-original` marks the
-  starting commit.
+- **All locations** aggregates the complete system by technology. KPI cards
+  show total CAPEX, time-window OPEX, installed flow capacity, production, and
+  CO₂. The charts and detail table show the corresponding technology breakdown.
+- **By location** shows the same metrics for one model node.
+- **By technology** compares one technology across model nodes.
 
-Nothing needs to be pushed to use these local branches. See
-[`docs/branches.md`](docs/branches.md) before merging changes between them.
+Production and demand time series respect the selected carrier and time window.
+The CO₂ panels appear when the model contains a `co2` cost class.
 
 ## Repository layout
 
-- `app/`: Dash layouts, callbacks, figures, and NetCDF loading.
-- `helpers/`: the Calliope-to-dashboard compatibility boundary.
-- `models/`: model sources and generated dashboard fixtures.
-- `tests/`: data, helper, and Dash smoke tests.
-- `docs/`: branch, architecture, and environment notes.
+- `calliope_dashboard/`: public Python API and server command.
+- `app/`: Dash layouts, callbacks, and data loading.
+- `helpers/`: Calliope/xarray-to-dashboard adapters.
+- `models/`: reproducible NetCDF fixtures and historical examples.
+- `tests/`: helper, aggregation, API, and Dash smoke tests.
+- `docs/`: architecture and environment details.
+
+The current implementation targets Calliope `0.7.0.dev7`. See
+[`docs/architecture.md`](docs/architecture.md) for the data boundary and
+[`docs/environments.md`](docs/environments.md) for environment maintenance.

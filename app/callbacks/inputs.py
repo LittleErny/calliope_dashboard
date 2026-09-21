@@ -10,8 +10,8 @@ from dash import Input, Output, dcc, html
 import dash
 import dash_leaflet as dl
 
-import app_data
-from figures import compute_resample_rule, downsample_series
+from app import app_data
+from app.figures import compute_resample_rule, downsample_series
 
 
 INPUT_MARKER_COMPONENTS = [

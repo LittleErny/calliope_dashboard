@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dash import dcc, html
 
-import app_data
-from figures import APP_BG
+from app import app_data
+from app.figures import APP_BG
 
 
 def layout_header() -> html.Div:
@@ -82,7 +82,7 @@ def layout_tabs() -> html.Div:
         [
             dcc.Tabs(
                 id="tabs-mode",
-                value="inputs",
+                value=app_data.DEFAULT_TAB,
                 children=[
                     dcc.Tab(label="Inputs", value="inputs"),
                     dcc.Tab(label="Results: Planning", value="results_planning"),

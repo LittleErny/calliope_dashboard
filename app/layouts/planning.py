@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dash import dcc, html, dash_table
 
-import app_data
+from app import app_data
+from helpers.results_helper import ALL_LOCATIONS
 
 
 def layout_results_planning() -> html.Div:
@@ -30,8 +31,8 @@ def layout_results_planning() -> html.Div:
                             html.Div(id="plan-selector-label", style={"fontSize": "12px", "opacity": "0.7"}),
                             dcc.Dropdown(
                                 id="plan-location-dd",
-                                options=[{"label": c, "value": c} for c in app_data.PLAN_LOCATIONS],
-                                value=app_data.PLAN_LOCATIONS[0] if app_data.PLAN_LOCATIONS else None,
+                                options=app_data.PLAN_LOCATION_OPTIONS,
+                                value=ALL_LOCATIONS,
                                 clearable=False,
                                 style={"width": "260px"},
                             ),

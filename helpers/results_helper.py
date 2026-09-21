@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+ALL_LOCATIONS = "__all_locations__"
+
 
 class ResultsHelper:
     """Prepare the planning data used by the dashboard callbacks."""
@@ -82,7 +84,10 @@ class ResultsHelper:
         if self.inputs is None or variable not in self.inputs:
             return frame
         enabled = self.inputs[variable].to_series().rename("_enabled").reset_index()
-        enabled = enabled[enabled["_enabled"]].rename(
+        # Calliope serialises boolean arrays as int8 in NetCDF. h5netcdf keeps
+        # those 0/1 values as integers, so explicitly turn them back into a
+        # boolean mask before filtering rows.
+        enabled = enabled[enabled["_enabled"].astype(bool)].rename(
             columns={"nodes": "location", "techs": "technology_raw", "carriers": "carrier"}
         )
         keys = [key for key in ("location", "technology_raw", "carrier") if key in frame]
@@ -345,7 +350,7 @@ class ResultsHelper:
         view_mode: str,
         selected_location: Optional[str],
         selected_tech: Optional[str],
-    ) -> Dict[str, str]:
+    ) -> Dict[str, Optional[str]]:
         locations = self.get_locations()
         techs = self.get_technologies()
         if view_mode == "technology":
@@ -354,14 +359,25 @@ class ResultsHelper:
                 "selection_key": "technology",
                 "selection_value": selected_tech if selected_tech in techs else (techs[0] if techs else ""),
             }
+        if selected_location == ALL_LOCATIONS:
+            return {
+                "group_key": "technology",
+                "selection_key": "location",
+                "selection_value": None,
+            }
         return {
             "group_key": "technology",
             "selection_key": "location",
             "selection_value": selected_location if selected_location in locations else (locations[0] if locations else ""),
         }
 
-    def _selection(self, frame: pd.DataFrame, selection: Dict[str, str]) -> pd.DataFrame:
-        return frame[frame[selection["selection_key"]] == selection["selection_value"]]
+    def _selection(
+        self, frame: pd.DataFrame, selection: Dict[str, Optional[str]]
+    ) -> pd.DataFrame:
+        selection_value = selection["selection_value"]
+        if selection_value is None:
+            return frame
+        return frame[frame[selection["selection_key"]] == selection_value]
 
     def get_plan_kpis(
         self,
@@ -516,15 +532,17 @@ class ResultsHelper:
         selection = self.resolve_plan_selection(view_mode, selected_location, selected_tech)
         carrier_key = self.normalize_carrier(carrier)
         demand = self.get_plan_demand(scenario_id, start_ts, end_ts)
-        demand = demand[
-            (demand.location == selection["selection_value"]) & (demand.carrier == carrier_key)
-        ]
+        demand = demand[demand.carrier == carrier_key]
         consumption = self.get_plan_consumption(scenario_id, start_ts, end_ts)
         conversion = consumption[
-            (consumption.location == selection["selection_value"])
-            & (consumption.carrier == carrier_key)
+            (consumption.carrier == carrier_key)
             & consumption.technology_raw.map(self._is_conversion)
         ]
+        if selection["selection_value"] is not None:
+            demand = demand[demand.location == selection["selection_value"]]
+            conversion = conversion[
+                conversion.location == selection["selection_value"]
+            ]
         demand_series = demand.groupby("timestamp").demand_kwh.sum()
         conversion_series = conversion.groupby("timestamp").energy_kwh.sum()
         combined = demand_series.add(conversion_series, fill_value=0.0)

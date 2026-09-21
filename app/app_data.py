@@ -10,7 +10,7 @@ import xarray as xr
 
 from helpers.inputs_helper import InputsHelper
 from helpers.operate_results_helper import OperateResultsHelper
-from helpers.results_helper import ResultsHelper
+from helpers.results_helper import ALL_LOCATIONS, ResultsHelper
 
 # -----------------------------
 # Paths & loaders
@@ -22,6 +22,11 @@ MODEL_DIR = Path(os.environ.get("CALLIOPE_DASHBOARD_MODEL_DIR", DEFAULT_MODEL_DI
 
 PLANNING_PATH = MODEL_DIR / "planning.nc"
 OPERATE_PATH = MODEL_DIR / "operate.nc"
+
+_VALID_DEFAULT_TABS = {"inputs", "results_planning", "results_operate"}
+DEFAULT_TAB = os.environ.get("CALLIOPE_DASHBOARD_DEFAULT_TAB", "inputs")
+if DEFAULT_TAB not in _VALID_DEFAULT_TABS:
+    DEFAULT_TAB = "inputs"
 
 
 def _load_netcdf_group(path: Path, group: str) -> xr.Dataset:
@@ -58,7 +63,16 @@ LOADED_INPUTS.attrs["calliope_version"] = CALLIOPE_VERSION
 INPUT_HELPER = InputsHelper(LOADED_INPUTS)
 
 INPUT_RAW_COORDS = INPUT_HELPER.get_loc_coords()  # [(name, lon, lat), ...]
-INPUT_LOCATIONS, INPUT_LONGITUDES, INPUT_LATITUDES = [list(x) for x in zip(*INPUT_RAW_COORDS)]
+if INPUT_RAW_COORDS:
+    INPUT_LOCATIONS, INPUT_LONGITUDES, INPUT_LATITUDES = [
+        list(values) for values in zip(*INPUT_RAW_COORDS)
+    ]
+else:
+    # Coordinates are optional in Calliope. Keep non-map dashboard views usable
+    # for models such as the THD case study, which defines no node coordinates.
+    INPUT_LOCATIONS = INPUT_HELPER.get_locations()
+    INPUT_LONGITUDES = []
+    INPUT_LATITUDES = []
 
 INPUT_CITIES = {name: [lat, lon] for name, lon, lat in INPUT_RAW_COORDS}
 
@@ -71,7 +85,7 @@ def _compute_map_center() -> List[float]:
 
 
 MAP_CENTER = _compute_map_center()
-MAP_ZOOM_DEFAULT = 6
+MAP_ZOOM_DEFAULT = 15 if INPUT_RAW_COORDS else 6
 
 INPUT_CONNECTIONS = []
 for line in INPUT_HELPER.get_transmission_lines():
@@ -110,6 +124,10 @@ else:
 T = len(TIME_INDEX)
 
 PLAN_LOCATIONS = RESULTS_HELPER.get_locations()
+PLAN_LOCATION_OPTIONS = [
+    {"label": "All locations", "value": ALL_LOCATIONS},
+    *({"label": location, "value": location} for location in PLAN_LOCATIONS),
+]
 PLAN_TECHS = RESULTS_HELPER.get_technologies()
 PLAN_CARRIERS = RESULTS_HELPER.get_carriers()
 

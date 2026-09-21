@@ -9,8 +9,8 @@ from dash import Input, Output, State, dcc, html, MATCH
 import dash
 import dash_leaflet as dl
 
-import app_data
-from figures import compute_resample_rule, downsample_series
+from app import app_data
+from app.figures import compute_resample_rule, downsample_series
 
 
 UNMET_GREEN = (46, 204, 113)

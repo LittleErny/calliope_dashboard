@@ -6,10 +6,21 @@ import numpy as np
 import pandas as pd
 from dash import Input, Output, html
 
-import app_data
-from layouts.inputs import layout_inputs
-from layouts.planning import layout_results_planning
-from layouts.operate import layout_results_operate
+from app import app_data
+from app.layouts.inputs import layout_inputs
+from app.layouts.operate import layout_results_operate
+from app.layouts.planning import layout_results_planning
+
+
+def layout_for_tab(tab_value: str):
+    """Build the page for a dashboard tab."""
+    if tab_value == "inputs":
+        return layout_inputs()
+    if tab_value == "results_planning":
+        return layout_results_planning()
+    if tab_value == "results_operate":
+        return layout_results_operate()
+    return html.Div("Unknown mode")
 
 
 def register_common_callbacks(app):
@@ -18,13 +29,7 @@ def register_common_callbacks(app):
         Input("tabs-mode", "value"),
     )
     def render_page(tab_value: str):
-        if tab_value == "inputs":
-            return layout_inputs()
-        if tab_value == "results_planning":
-            return layout_results_planning()
-        if tab_value == "results_operate":
-            return layout_results_operate()
-        return html.Div("Unknown mode")
+        return layout_for_tab(tab_value)
 
     @app.callback(
         Output("time-label", "children"),

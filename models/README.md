@@ -19,6 +19,6 @@ and calls `model.to_netcdf(...)` for both modes.
 Set `CALLIOPE_DASHBOARD_MODEL_DIR` to the new folder when running the app. The
 dashboard never reads model YAML or CSV files directly.
 
-`mainkofen_case_study` is the original Calliope 0.6 model and is retained as
-historical project material. Its pickle files are used by the stable 0.6 branch,
-not by this branch.
+The original Calliope 0.6 Mainkofen material is intentionally absent from this
+0.7/Pareto branch. It remains available in the `stable/calliope-0.6.10` branch
+and the `internship-original` tag.

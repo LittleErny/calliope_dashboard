@@ -7,8 +7,15 @@ import pandas as pd
 import plotly.graph_objects as go
 from dash import Input, Output, State
 
-import app_data
-from figures import downsample_grouped_frame, downsample_series, empty_figure, format_number, kpi_tile
+from app import app_data
+from app.figures import (
+    downsample_grouped_frame,
+    downsample_series,
+    empty_figure,
+    format_number,
+    kpi_tile,
+)
+from helpers.results_helper import ALL_LOCATIONS
 
 OTHER_TECH_COLOR = "#b3b3b3"
 
@@ -48,7 +55,8 @@ def register_planning_callbacks(app):
     def update_plan_selector(view_mode: str, current_loc: str, current_tech: str):
         if view_mode == "technology":
             tech_val = current_tech if current_tech in app_data.PLAN_TECHS else (app_data.PLAN_TECHS[0] if app_data.PLAN_TECHS else None)
-            loc_val = current_loc if current_loc in app_data.PLAN_LOCATIONS else (app_data.PLAN_LOCATIONS[0] if app_data.PLAN_LOCATIONS else None)
+            valid_locations = [ALL_LOCATIONS, *app_data.PLAN_LOCATIONS]
+            loc_val = current_loc if current_loc in valid_locations else ALL_LOCATIONS
             return (
                 "Select technology",
                 {"width": "260px", "display": "none"},
@@ -56,7 +64,8 @@ def register_planning_callbacks(app):
                 loc_val,
                 tech_val,
             )
-        loc_val = current_loc if current_loc in app_data.PLAN_LOCATIONS else (app_data.PLAN_LOCATIONS[0] if app_data.PLAN_LOCATIONS else None)
+        valid_locations = [ALL_LOCATIONS, *app_data.PLAN_LOCATIONS]
+        loc_val = current_loc if current_loc in valid_locations else ALL_LOCATIONS
         tech_val = current_tech if current_tech in app_data.PLAN_TECHS else (app_data.PLAN_TECHS[0] if app_data.PLAN_TECHS else None)
         return (
             "Select location",

@@ -30,7 +30,7 @@ make setup CONDA_COMMAND=mamba
 ```bash
 conda run -n calliope-dashboard-070 pytest -q
 conda run -n calliope-dashboard-070 python scripts/check_model_environment.py
-conda run -n calliope-dashboard-070 python app/app.py
+conda run -n calliope-dashboard-070 python -m calliope_dashboard
 ```
 
 `make check` combines the first two checks. The model check verifies the exact

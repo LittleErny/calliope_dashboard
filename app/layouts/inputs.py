@@ -3,7 +3,7 @@ from __future__ import annotations
 from dash import dcc, html
 import dash_leaflet as dl
 
-import app_data
+from app import app_data
 
 
 def layout_inputs() -> html.Div:

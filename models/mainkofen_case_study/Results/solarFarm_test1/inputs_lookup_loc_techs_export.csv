@@ -1,4 +1,0 @@
-locs,techs,lookup_loc_techs_export
-Mainkofen,pv,Mainkofen::pv::electricity
-Mainkofen,pv_carport,Mainkofen::pv_carport::electricity
-Mainkofen,pv_solarFarm,Mainkofen::pv_solarFarm::electricity

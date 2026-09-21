@@ -1,9 +1,0 @@
-techs,names
-battery_storage,Battery (Li-ion)
-biomass,Biomass power plant
-demand_electricity,Electricity demand
-grid_electricity,Grid import
-heat_demand_orc_only,ORC Heat demand
-pv,PV Rooftop 
-pv_carport,PV Parking Canopy
-supply_biomass,supply_biomass

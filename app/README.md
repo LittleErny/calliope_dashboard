@@ -13,12 +13,11 @@ it does not run the optimisation model.
 
 ## Data selection
 
-The default folder is `models/1_german_scale`. Override it without editing
-Python source:
+The default folder is `models/1_german_scale`. Select another export without
+editing Python source:
 
 ```bash
-CALLIOPE_DASHBOARD_MODEL_DIR=/absolute/path/to/model \
-conda run -n calliope-dashboard-070 python app/app.py
+calliope-dashboard --model-dir /absolute/path/to/model
 ```
 
 The folder must contain `planning.nc` and `operate.nc`. Both files must have
@@ -28,7 +27,8 @@ locations, technologies, and carriers.
 ## Tabs
 
 - Inputs shows topology, demand profiles, supply limits, and input parameters.
-- Planning shows capacity, costs, production, emissions, and detail tables.
+- Planning shows system-wide or per-location capacity, costs, production,
+  emissions, and detail tables.
 - Operate shows unmet demand, line loading, flows, and storage operation.
 
 The global scenario, carrier, and time controls are shared by all three tabs.
