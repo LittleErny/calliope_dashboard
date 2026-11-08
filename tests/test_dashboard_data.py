@@ -34,18 +34,38 @@ def test_german_scale_inputs() -> None:
     assert helper.get_location_demand("Berlin", "electricity")
 
 
+def test_supply_profile_without_node_dimension() -> None:
+    inputs = _load(MODEL_DIR / "planning.nc", "inputs")
+    source = inputs.source_use_max.sel(nodes="Berlin", drop=True)
+    inputs = inputs.drop_vars("source_use_max").assign(source_use_max=source)
+    helper = InputsHelper(inputs)
+
+    supply = helper.get_location_total_max_supply("Berlin", "electricity")["Berlin::pv"]
+    capacity = helper.get_loc_tech_capacity("Berlin", "pv")
+    expected = source.sel(techs="pv").fillna(0).values * capacity * 0.85
+    assert supply == pytest.approx(expected)
+
+
 def test_german_scale_planning_results() -> None:
     inputs = _load(MODEL_DIR / "planning.nc", "inputs")
     results = _load(MODEL_DIR / "planning.nc", "results")
     helper = ResultsHelper(results, inputs)
 
-    assert helper.get_carriers() == ["electricity"]
+    assert helper.get_carriers() == ["electricity", "heat"]
     assert helper.get_technologies() == [
-        "Battery Storage", "Coal Power Plant", "Gas Power Plant",
-        "Hydropower (Dams)", "Solar Photovoltaic Power", "Wind Energy",
+        "Battery Storage", "Coal Power Plant", "Gas Boiler", "Gas Power Plant",
+        "Hydropower (Dams)", "Solar Photovoltaic Power", "Solar Thermal", "Wind Energy",
     ]
     assert helper.get_plan_assets().built_capacity_kw.sum() > 0
     assert helper.get_plan_energy().energy_kwh.sum() > 0
+    times = helper.get_timesteps_datetime()
+    kpis = helper.get_plan_kpis(
+        "default", "electricity", times[0], times[-1], "location", ALL_LOCATIONS, None
+    )
+    electricity_techs = inputs.techs.where(inputs.definition_matrix.sel(carriers="electricity").any("nodes"), drop=True).values
+    assert kpis["total_cost"] == pytest.approx(
+        float(results.cost.sel(costs="monetary", techs=electricity_techs).fillna(0).sum())
+    )
 
 
 def test_german_scale_operate_results() -> None:
@@ -54,7 +74,7 @@ def test_german_scale_operate_results() -> None:
     helper = OperateResultsHelper(results, inputs)
 
     assert helper.get_timesteps_datetime().size == 336
-    assert helper.get_carriers() == ["electricity"]
+    assert helper.get_carriers() == ["electricity", "heat"]
     assert len(helper.get_physical_lines()) == 8
     for line_id in helper.get_line_ids():
         assert helper.get_line_capacity(line_id) > 0
@@ -87,7 +107,7 @@ def test_dashboard_queries_cover_each_view() -> None:
             "selected_tech": None,
         }
         assert set(helper.get_plan_kpis(**kwargs)) == {
-            "capacity", "capex", "opex", "production", "co2_kg"
+            "capacity", "capex", "total_cost", "opex", "production", "co2_kg"
         }
         assert "Name" in helper.get_plan_detail_table(**kwargs).columns
 

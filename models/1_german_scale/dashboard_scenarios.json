@@ -1,0 +1,17 @@
+{
+  "default": "default",
+  "scenarios": [
+    {
+      "id": "default",
+      "label": "Baseline",
+      "planning": "planning.nc",
+      "operate": "operate.nc"
+    },
+    {
+      "id": "high_demand",
+      "label": "High demand (+20%)",
+      "planning": "scenarios/high_demand/planning.nc",
+      "operate": "scenarios/high_demand/operate.nc"
+    }
+  ]
+}

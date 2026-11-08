@@ -5,12 +5,13 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Input, Output, State, dcc, html, MATCH
+from dash import ClientsideFunction, Input, Output, State, dcc, html, MATCH
 import dash
 import dash_leaflet as dl
 
 from app import app_data
-from app.figures import compute_resample_rule, downsample_series
+from app.coverage import aggregate_coverage
+from app.figures import DETAIL_CHART_CONFIG, compute_resample_rule, downsample_series, interval_label, style_detail_chart
 
 
 UNMET_GREEN = (46, 204, 113)
@@ -24,7 +25,6 @@ LINE_MIN_WIDTH = 2
 LINE_MAX_WIDTH = 8
 FLOW_EPS = 1e-6
 OPERATE_MAX_POINTS_LINE = 1200
-OPERATE_MAX_POINTS_BAR = 300
 
 
 def _lerp_color(a: Tuple[int, int, int], b: Tuple[int, int, int], t: float) -> str:
@@ -112,6 +112,7 @@ def _build_location_markers(unmet_map: Dict[str, float]) -> List[dl.CircleMarker
             dl.CircleMarker(
                 id=f"operate-marker-{city}",
                 center=coords,
+                pane="markerPane",
                 radius=12,
                 pathOptions={
                     "color": "#1f1f1f",
@@ -126,21 +127,22 @@ def _build_location_markers(unmet_map: Dict[str, float]) -> List[dl.CircleMarker
     return markers
 
 
-def _resolve_operate_window(rs_time: List[int]) -> Tuple[int, int]:
+def _resolve_operate_window(rs_time: List[int], data=None) -> Tuple[int, int]:
     """
     Resolve operate timesteps indices for the global time window.
     """
-    if not app_data.OPERATE_T or not app_data.TIME_INDEX.size:
-        return 0, max(0, app_data.OPERATE_T - 1)
+    data = data or app_data.get_scenario()
+    if not data.OPERATE_T or not data.TIME_INDEX.size:
+        return 0, max(0, data.OPERATE_T - 1)
     i0, i1 = sorted([int(rs_time[0]), int(rs_time[1])])
-    i0 = max(0, min(len(app_data.TIME_INDEX) - 1, i0))
-    i1 = max(0, min(len(app_data.TIME_INDEX) - 1, i1))
-    t0 = app_data.TIME_INDEX[i0]
-    t1 = app_data.TIME_INDEX[i1]
+    i0 = max(0, min(len(data.TIME_INDEX) - 1, i0))
+    i1 = max(0, min(len(data.TIME_INDEX) - 1, i1))
+    t0 = data.TIME_INDEX[i0]
+    t1 = data.TIME_INDEX[i1]
 
-    mask = (app_data.OPERATE_TIMESTEPS >= t0) & (app_data.OPERATE_TIMESTEPS <= t1)
+    mask = (data.OPERATE_TIMESTEPS >= t0) & (data.OPERATE_TIMESTEPS <= t1)
     if not mask.any():
-        return 0, max(0, app_data.OPERATE_T - 1)
+        return 0, max(0, data.OPERATE_T - 1)
     indices = np.where(mask)[0]
     return int(indices[0]), int(indices[-1])
 
@@ -152,11 +154,13 @@ def _build_line_components(
     start_idx: int,
     end_idx: int,
     zoom: Optional[float],
+    data=None,
 ) -> Tuple[List[dl.Polyline], List[dl.Polygon]]:
     """
     Build polylines and arrowheads for transmission lines.
     """
-    helper = app_data.OPERATE_HELPER
+    data = data or app_data.get_scenario()
+    helper = data.OPERATE_HELPER
     connections = app_data.OPERATE_CONNECTIONS
 
     capacities = []
@@ -182,6 +186,7 @@ def _build_line_components(
         b_coords = app_data.INPUT_CITIES[b]
 
         a_to_b, b_to_a = helper.get_line_ids_for_pair(a, b)
+        visible = a_to_b is not None or b_to_a is not None
 
         load_vals = []
         flow_vals = {}
@@ -203,7 +208,7 @@ def _build_line_components(
         line_components.append(
             dl.Polyline(
                 id=f"operate-route-{a}-{b}",
-                positions=[a_coords, b_coords],
+                positions=[a_coords, b_coords] if visible else [],
                 pathOptions={"color": color, "weight": weight, "opacity": 0.8},
                 children=[dl.Tooltip(tooltip)],
             )
@@ -211,7 +216,7 @@ def _build_line_components(
 
         # Arrowheads for A -> B
         if a_to_b and flow_vals.get(a_to_b, 0.0) > FLOW_EPS:
-            tri = app_data.arrowhead_triangle_at_b(a_coords, b_coords, length_m=length_m, width_m=width_m)
+            tri = app_data.arrowhead_triangle_at_b(a_coords, b_coords, length_m=length_m, width_m=width_m, zoom=zoom)
         else:
             tri = []
         arrow_components.append(
@@ -219,8 +224,8 @@ def _build_line_components(
                 id=f"operate-head-{a}-{b}",
                 positions=tri,
                 pathOptions={
-                    "color": color,
-                    "weight": 2,
+                    "color": "#1f1f1f",
+                    "weight": 1,
                     "fill": True,
                     "fillColor": color,
                     "fillOpacity": 0.8,
@@ -230,7 +235,7 @@ def _build_line_components(
 
         # Arrowheads for B -> A
         if b_to_a and flow_vals.get(b_to_a, 0.0) > FLOW_EPS:
-            tri = app_data.arrowhead_triangle_at_b(b_coords, a_coords, length_m=length_m, width_m=width_m)
+            tri = app_data.arrowhead_triangle_at_b(b_coords, a_coords, length_m=length_m, width_m=width_m, zoom=zoom)
         else:
             tri = []
         arrow_components.append(
@@ -238,8 +243,8 @@ def _build_line_components(
                 id=f"operate-head-{b}-{a}",
                 positions=tri,
                 pathOptions={
-                    "color": color,
-                    "weight": 2,
+                    "color": "#1f1f1f",
+                    "weight": 1,
                     "fill": True,
                     "fillColor": color,
                     "fillOpacity": 0.8,
@@ -255,26 +260,23 @@ def _default_operate_panel_content() -> List[html.Component]:
     Default content for the operate info panel (inner content only).
     """
     return [
-        html.H3("Selection Info"),
-        html.P("Click a location or a transmission line to see details here."),
+        html.H3("Selection details"),
+        html.P("Select a location or transmission line on the map to see its details."),
     ]
 
 
-def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_idx: int) -> html.Div:
+def _build_demand_coverage_figure(location: str, carrier: str, start_idx: int, end_idx: int, data=None, mode="auto"):
     """
     Build a stacked bar card for demand coverage by tech + unmet.
     """
-    helper = app_data.OPERATE_HELPER
+    data = data or app_data.get_scenario()
+    helper = data.OPERATE_HELPER
     demand_ts = helper.get_location_effective_demand_window(location, carrier, start_idx, end_idx)
     unmet_ts = helper.get_location_unmet_window(location, carrier, start_idx, end_idx)
 
-    if demand_ts.empty:
-        return html.Div()
+    if demand_ts.empty or demand_ts.sum() <= 0:
+        return None
 
-    max_points = OPERATE_MAX_POINTS_BAR
-    rule = compute_resample_rule(demand_ts.index, max_points)
-    demand_ts = downsample_series(demand_ts, max_points=max_points, how="mean", rule=rule)
-    unmet_ts = downsample_series(unmet_ts, max_points=max_points, how="mean", rule=rule)
     unmet_ts = unmet_ts.reindex(demand_ts.index, fill_value=0.0)
     met_ts = (demand_ts - unmet_ts).clip(lower=0.0)
 
@@ -286,7 +288,6 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
 
     for tech in techs:
         prod_ts = helper.get_location_tech_production_window(location, tech, carrier, start_idx, end_idx)
-        prod_ts = downsample_series(prod_ts, max_points=max_points, how="mean", rule=rule)
         if prod_ts.sum() <= 0:
             continue
         tech_series[tech] = prod_ts
@@ -300,7 +301,6 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
         if not line_ref:
             continue
         import_ts = helper.get_line_flow_window(line_id, carrier, start_idx, end_idx).clip(lower=0.0)
-        import_ts = downsample_series(import_ts, max_points=max_points, how="mean", rule=rule)
         if import_ts.sum() <= 0:
             continue
         label = f"Import from {line_ref.src}"
@@ -318,7 +318,31 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
     if total_prod_ts is None:
         total_prod_ts = pd.Series(index=demand_ts.index, data=0.0)
 
-    total_demand = demand_ts.replace(0, np.nan)
+    # Allocate at each original timestep before summing: aggregating production
+    # first would distort shares when demand and the production mix vary.
+    components = {}
+    for tech, prod_ts in tech_series.items():
+        share = (prod_ts / total_prod_ts.replace(0, np.nan)).fillna(0.0)
+        components[tech] = (met_ts * share).fillna(0.0)
+    energy = pd.DataFrame(components, index=demand_ts.index)
+    energy["__demand"] = demand_ts
+    energy["__unmet"] = unmet_ts
+    if helper.inputs is not None and "timestep_resolution" in helper.inputs:
+        durations = helper.inputs.timestep_resolution.to_series()
+    else:
+        # Older exports without durations: use the full model's time spacing.
+        index = pd.DatetimeIndex(helper.results.timesteps.values)
+        step = index.to_series().diff().median() if len(index) > 1 else pd.Timedelta(hours=1)
+        durations = pd.Series(step / pd.Timedelta(hours=1), index=index)
+    grouped, periods, interval = aggregate_coverage(energy, durations, mode=mode)
+    total_demand = grouped["__demand"].replace(0, np.nan)
+    period_labels = [
+        f"{start:%d %b %Y %H:%M} – {end:%d %b %Y %H:%M} (end exclusive)"
+        for start, end in zip(periods.start, periods.end)
+    ]
+    centers = periods.start + (periods.end - periods.start) / 2
+    widths = (periods.end - periods.start).dt.total_seconds() * 1000 * 0.9
+    hover = "%{customdata[1]}<br>Tech: %{fullData.name}<br>%{y:,.0f} kWh<br>%{customdata[0]:.1f}% of demand<extra></extra>"
 
     # Determine order by total production over the window (descending)
     ordered_techs = [t for t, _ in sorted(tech_totals.items(), key=lambda x: x[1], reverse=True)]
@@ -358,13 +382,11 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
     for i, src in enumerate(import_sources):
         import_color_map[f"Import from {src}"] = import_palette[i % len(import_palette)]
 
-    unmet_pct = (unmet_ts / total_demand * 100).fillna(0.0)
+    unmet_pct = (grouped["__unmet"] / total_demand * 100).fillna(0.0)
     fig = go.Figure()
     # Add met demand components
     for i, tech in enumerate(ordered_techs):
-        prod_ts = tech_series[tech]
-        share = (prod_ts / total_prod_ts.replace(0, np.nan)).fillna(0.0)
-        alloc_ts = (met_ts * share).fillna(0.0)
+        alloc_ts = grouped[tech]
         pct = (alloc_ts / total_demand * 100).fillna(0.0)
         label = tech_labels.get(tech, tech)
         if label.startswith("Import from "):
@@ -374,94 +396,146 @@ def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_id
             color = tech_color_map.get(base, fallback_palette[i % len(fallback_palette)])
         fig.add_trace(
             go.Bar(
-                x=alloc_ts.index,
+                x=centers,
+                width=widths,
                 y=alloc_ts.values,
                 name=label,
                 marker_color=color,
-                customdata=pct.values,
-                hovertemplate="Tech: %{fullData.name}<br>%{y:.0f} kWh<br>%{customdata:.1f}% of demand<extra></extra>",
+                customdata=list(zip(pct.values, period_labels)),
+                hovertemplate=hover,
             )
         )
 
     fig.add_trace(
         go.Bar(
-            x=demand_ts.index,
-            y=unmet_ts.values,
+            x=centers,
+            width=widths,
+            y=grouped["__unmet"].values,
             name="Unmet demand",
             marker_color="#c0392b",
-            customdata=unmet_pct.values,
-            hovertemplate="Tech: %{fullData.name}<br>%{y:.0f} kWh<br>%{customdata:.1f}% of demand<extra></extra>",
+            customdata=list(zip(unmet_pct.values, period_labels)),
+            hovertemplate=hover,
         )
     )
 
     fig.update_layout(
         barmode="stack",
         title=None,
-        height=320,
+        autosize=True,
         margin=dict(t=20, r=10, b=20, l=40),
-        xaxis_title="Time",
+        xaxis_title=f"Time · {interval} per bar · {len(grouped)} bars",
         yaxis_title="kWh",
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
     )
+    return style_detail_chart(fig)
+
+
+def _build_demand_unmet_card(location: str, carrier: str, start_idx: int, end_idx: int, data=None) -> html.Div:
+    fig = _build_demand_coverage_figure(location, carrier, start_idx, end_idx, data=data)
+    if fig is None:
+        return html.Div()
 
     card_style = {
-        "border": "1px solid #ccc",
-        "borderRadius": "6px",
+        "border": "1px solid #dce6e7",
+        "borderRadius": "16px",
         "padding": "10px",
         "marginBottom": "12px",
         "backgroundColor": "#fff",
-        "boxShadow": "0 1px 2px rgba(0,0,0,0.06)",
+        "boxShadow": "none",
     }
 
     return html.Div(
+        id=f"coverage-card-{location}",
+        className="coverage-card",
         style=card_style,
         children=[
-            html.H4("Demand coverage", style={"marginBottom": "6px"}),
-            dcc.Graph(figure=fig, style={"height": "320px", "width": "100%"}),
+            html.Div(
+                [
+                    html.H4("Demand coverage", style={"margin": 0}),
+                    html.Span(
+                        [
+                            "?",
+                            html.Span(
+                                "Met demand is allocated proportionally to local output and imports; these shares are estimates, not traced energy origins.",
+                                id=f"coverage-help-{location}",
+                                className="coverage-help-tooltip", role="tooltip",
+                            ),
+                        ],
+                        className="coverage-help", tabIndex=0,
+                        **{"aria-label": "How demand coverage is calculated", "aria-describedby": f"coverage-help-{location}"},
+                    ),
+                ],
+                className="coverage-heading",
+            ),
+            html.Div([
+                dcc.RadioItems(
+                    id={"type": "coverage-mode", "location": location},
+                    options=[{"label": "Auto (≤60 bars)", "value": "auto"},
+                             {"label": "Hourly (all)", "value": "hourly"}],
+                    value="auto", inline=True, persistence=True,
+                    persistence_type="session", className="coverage-mode",
+                ),
+                html.Button("⛶", id={"type": "coverage-fullscreen", "location": location},
+                            n_clicks=0, title="Toggle full screen · Esc to exit",
+                            className="coverage-fullscreen", **{"aria-label": "Toggle demand coverage full screen"}),
+            ], className="coverage-controls"),
+            dcc.Graph(id={"type": "coverage-chart", "location": location},
+                      responsive=True, config=DETAIL_CHART_CONFIG, figure=fig, style={"height": "320px", "width": "100%"}),
         ],
     )
 
 
-def _build_line_timeseries_figure(a: str, b: str, carrier: str, start_idx: int, end_idx: int) -> go.Figure:
+def _build_line_timeseries_figure(a: str, b: str, carrier: str, start_idx: int, end_idx: int, data=None) -> go.Figure:
     """
     Build a flow timeseries figure for a transmission line (both directions).
     """
-    helper = app_data.OPERATE_HELPER
+    data = data or app_data.get_scenario()
+    helper = data.OPERATE_HELPER
     a_to_b, b_to_a = helper.get_line_ids_for_pair(a, b)
     cap = 0.0
     series = []
 
     if a_to_b:
-        ts = helper.get_line_flow_window(a_to_b, carrier, start_idx, end_idx)
+        ts = helper.get_line_power_window(a_to_b, carrier, start_idx, end_idx)
         cap = max(cap, helper.get_line_capacity(a_to_b))
         if ts.abs().sum() > FLOW_EPS:
-            series.append((f"{a} → {b}", ts))
+            series.append((f"{a} → {b}", ts, a_to_b))
     if b_to_a:
-        ts = helper.get_line_flow_window(b_to_a, carrier, start_idx, end_idx)
+        ts = helper.get_line_power_window(b_to_a, carrier, start_idx, end_idx)
         cap = max(cap, helper.get_line_capacity(b_to_a))
         if ts.abs().sum() > FLOW_EPS:
-            series.append((f"{b} → {a}", ts))
+            series.append((f"{b} → {a}", ts, b_to_a))
 
     max_points = OPERATE_MAX_POINTS_LINE
     rule = compute_resample_rule(series[0][1].index, max_points) if series else None
 
     fig = go.Figure()
-    for label, ts in series:
-        ts = downsample_series(ts, max_points=max_points, how="mean", rule=rule)
-        pct = (ts.values / cap * 100) if cap > 0 else np.zeros(len(ts))
+    for label, raw, line_id in series:
+        duration = helper.timestep_hours().reindex(raw.index)
+        energy = downsample_series(raw * duration, max_points=max_points, how="sum", rule=rule)
+        hours = downsample_series(duration, max_points=max_points, how="sum", rule=rule)
+        ts = energy / hours
+        loads = helper.get_line_load_fraction_window(line_id, carrier, start_idx, end_idx)
+        pct = downsample_series(loads * duration, max_points=max_points, how="sum", rule=rule) / hours * 100
+        peaks = downsample_series(loads, max_points=max_points, how="max", rule=rule) * 100
         fig.add_trace(
             go.Scattergl(
                 x=ts.index,
                 y=ts.values,
                 mode="lines",
-                name=label,
-                customdata=pct,
-                hovertemplate="%{y:.0f} kWh<br>%{customdata:.1f}% of capacity<extra></extra>",
+                name=label + (" · average" if rule else ""),
+                customdata=np.column_stack([pct.values, peaks.values]),
+                hovertemplate="Received power: %{y:,.2f} kW<br>Sending-end load: %{customdata[0]:.1f}%<br>Peak load in interval: %{customdata[1]:.1f}%<extra></extra>",
             )
         )
+        if rule:
+            peak_power = downsample_series(raw, max_points=max_points, how="max", rule=rule)
+            fig.add_trace(go.Scattergl(x=peak_power.index, y=peak_power.values, mode="lines",
+                                      name=label + " · peak", line=dict(dash="dot"),
+                                      hovertemplate="Peak received power: %{y:,.2f} kW<extra></extra>"))
 
     if cap > 0:
-        cap_index = series[0][1].index if series else app_data.OPERATE_TIMESTEPS
+        cap_index = series[0][1].index if series else data.OPERATE_TIMESTEPS
         cap_index = downsample_series(
             pd.Series(np.zeros(len(cap_index)), index=cap_index),
             max_points=max_points,
@@ -489,12 +563,12 @@ def _build_line_timeseries_figure(a: str, b: str, carrier: str, start_idx: int, 
         title=title,
         height=280,
         margin=dict(l=10, r=10, t=45, b=30),
-        xaxis_title="Time",
-        yaxis_title="kWh",
+        xaxis_title=f"Time · power per {interval_label(rule)}",
+        yaxis_title="kW",
         yaxis=dict(range=[0, cap * 1.05 if cap > 0 else None]),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    return fig
+    return style_detail_chart(fig)
 
 
 def _build_storage_figure(
@@ -504,22 +578,22 @@ def _build_storage_figure(
     start_idx: int,
     end_idx: int,
     mode: str,
+    data=None,
 ) -> go.Figure:
     """
     Build a storage figure for SOC or charge/discharge.
     """
-    helper = app_data.OPERATE_HELPER
+    data = data or app_data.get_scenario()
+    helper = data.OPERATE_HELPER
     soc_ts = helper.get_storage_soc_window(location, tech, start_idx, end_idx)
     storage_cap = helper.get_storage_capacity(location, tech)
 
     if mode == "flow":
         charge_ts = helper.get_location_tech_consumption_window(location, tech, carrier, start_idx, end_idx).abs()
         discharge_ts = helper.get_location_tech_production_window(location, tech, carrier, start_idx, end_idx).abs()
-        max_points = OPERATE_MAX_POINTS_BAR
-        base_index = charge_ts.index if not charge_ts.empty else discharge_ts.index
-        rule = compute_resample_rule(base_index, max_points) if len(base_index) else None
-        charge_ts = downsample_series(charge_ts, max_points=max_points, how="mean", rule=rule)
-        discharge_ts = downsample_series(discharge_ts, max_points=max_points, how="mean", rule=rule)
+        grouped, periods, interval = aggregate_coverage(
+            pd.DataFrame({"charge": charge_ts, "discharge": discharge_ts}), helper.timestep_hours())
+        charge_ts, discharge_ts = grouped.charge, grouped.discharge
 
         fig = go.Figure()
         if not charge_ts.empty:
@@ -553,17 +627,18 @@ def _build_storage_figure(
             barmode="overlay",
             height=280,
             margin=dict(t=35, r=10, b=25, l=40),
-            xaxis_title="Time",
+            xaxis_title=f"Time · energy total per {interval}",
             yaxis_title="kWh",
             yaxis=dict(range=[-max_val * 1.1 if max_val > 0 else None, max_val * 1.1 if max_val > 0 else None]),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
-        return fig
+        return style_detail_chart(fig)
 
     # Default: SOC
     max_points = OPERATE_MAX_POINTS_LINE
     rule = compute_resample_rule(soc_ts.index, max_points) if not soc_ts.empty else None
-    soc_ts = downsample_series(soc_ts, max_points=max_points, how="mean", rule=rule)
+    raw_soc = soc_ts
+    soc_ts = downsample_series(raw_soc, max_points=max_points, how="last", rule=rule)
     pct = (soc_ts / storage_cap * 100) if storage_cap > 0 else np.zeros(len(soc_ts))
     fig = go.Figure()
     fig.add_trace(
@@ -571,29 +646,36 @@ def _build_storage_figure(
             x=soc_ts.index,
             y=soc_ts.values,
             mode="lines",
-            name="SOC",
+            name="SOC · end of interval" if rule else "SOC",
             line=dict(color="#2A9D8F", width=2),
             fill="tozeroy",
             customdata=pct,
             hovertemplate="SOC: %{y:.0f} kWh<br>%{customdata:.1f}% of capacity<extra></extra>",
         )
     )
+    if rule:
+        for how in ("min", "max"):
+            extrema = downsample_series(raw_soc, max_points=max_points, how=how, rule=rule)
+            fig.add_trace(go.Scattergl(x=extrema.index, y=extrema.values, mode="lines",
+                                      name=f"SOC · {how}", line=dict(dash="dot"),
+                                      hovertemplate=f"{how} SOC: %{{y:,.2f}} kWh<extra></extra>"))
     fig.update_layout(
         height=280,
         margin=dict(t=35, r=10, b=25, l=40),
-        xaxis_title="Time",
+        xaxis_title=f"Time · state per {interval_label(rule)}",
         yaxis_title="kWh",
         yaxis=dict(range=[0, storage_cap * 1.05 if storage_cap > 0 else None]),
-        showlegend=False,
+        showlegend=rule is not None,
     )
-    return fig
+    return style_detail_chart(fig)
 
 
-def _build_storage_card(location: str, tech: str, carrier: str, start_idx: int, end_idx: int) -> html.Div:
+def _build_storage_card(location: str, tech: str, carrier: str, start_idx: int, end_idx: int, data=None) -> html.Div:
     """
     Build a storage technology card with SOC/flow toggle and summary.
     """
-    helper = app_data.OPERATE_HELPER
+    data = data or app_data.get_scenario()
+    helper = data.OPERATE_HELPER
     soc_ts = helper.get_storage_soc_window(location, tech, start_idx, end_idx)
     storage_cap = helper.get_storage_capacity(location, tech)
     energy_caps = helper.get_location_energy_caps(location)
@@ -623,12 +705,12 @@ def _build_storage_card(location: str, tech: str, carrier: str, start_idx: int, 
     )
 
     card_style = {
-        "border": "1px solid #ccc",
-        "borderRadius": "6px",
+        "border": "1px solid #dce6e7",
+        "borderRadius": "16px",
         "padding": "10px",
         "marginBottom": "12px",
         "backgroundColor": "#fff",
-        "boxShadow": "0 1px 2px rgba(0,0,0,0.06)",
+        "boxShadow": "none",
     }
 
     return html.Div(
@@ -646,24 +728,25 @@ def _build_storage_card(location: str, tech: str, carrier: str, start_idx: int, 
                 inline=True,
                 style={"display": "flex", "gap": "12px", "marginBottom": "8px"},
             ),
-            dcc.Graph(
+            dcc.Graph(responsive=True, config=DETAIL_CHART_CONFIG,
                 id={"type": "operate-storage-graph", "location": location, "tech": tech},
-                figure=_build_storage_figure(location, tech, carrier, start_idx, end_idx, "soc"),
+                figure=_build_storage_figure(location, tech, carrier, start_idx, end_idx, "soc", data=data),
                 style={"height": "280px", "width": "100%"},
             ),
         ],
     )
 
 
-def _build_location_cards(location: str, carrier: str, start_idx: int, end_idx: int) -> List[html.Div]:
+def _build_location_cards(location: str, carrier: str, start_idx: int, end_idx: int, data=None) -> List[html.Div]:
     """
     Build location cards (demand + storage only).
     """
-    helper = app_data.OPERATE_HELPER
+    data = data or app_data.get_scenario()
+    helper = data.OPERATE_HELPER
     cards: List[html.Div] = []
     carrier_key = helper.normalize_carrier(carrier)
 
-    demand_card = _build_demand_unmet_card(location, carrier, start_idx, end_idx)
+    demand_card = _build_demand_unmet_card(location, carrier, start_idx, end_idx, data=data)
     if demand_card.children:
         cards.append(demand_card)
 
@@ -678,46 +761,69 @@ def _build_location_cards(location: str, carrier: str, start_idx: int, end_idx: 
             storage_techs.append(tech)
 
     for tech in storage_techs:
-        cards.append(_build_storage_card(location, tech, carrier, start_idx, end_idx))
+        cards.append(_build_storage_card(location, tech, carrier, start_idx, end_idx, data=data))
 
     return cards
 
 
 def register_operate_callbacks(app):
     @app.callback(
+        Output({"type": "coverage-chart", "location": MATCH}, "figure"),
+        Input({"type": "coverage-mode", "location": MATCH}, "value"),
+        State({"type": "coverage-mode", "location": MATCH}, "id"),
+        State("dd-carrier", "value"),
+        State("dd-scenario", "value"),
+        State("applied-time", "data"),
+    )
+    def update_coverage_mode(mode, component_id, carrier, scenario, applied):
+        data = app_data.get_scenario(scenario, carrier)
+        start, end = _resolve_operate_window(applied, data)
+        return _build_demand_coverage_figure(component_id["location"], carrier, start, end, data=data, mode=mode)
+
+    app.clientside_callback(
+        ClientsideFunction(namespace="coverage", function_name="fullscreen"),
+        Output({"type": "coverage-fullscreen", "location": MATCH}, "title"),
+        Input({"type": "coverage-fullscreen", "location": MATCH}, "n_clicks"),
+        State({"type": "coverage-fullscreen", "location": MATCH}, "id"),
+        prevent_initial_call=True,
+    )
+
+    @app.callback(
         Output("operate-map-layer", "children"),
         Input("operate-map-mode", "value"),
         Input("operate-timestep", "value"),
         Input("dd-carrier", "value"),
         Input("operate-map", "zoom"),
-        Input("rs-time", "value"),
+        Input("applied-time", "data"),
+        Input("dd-scenario", "value"),
     )
-    def update_operate_map(mode: str, timestep_idx: int, carrier: str, zoom: Optional[float], rs_time: List[int]):
-        carrier_key = app_data.OPERATE_HELPER.normalize_carrier(str(carrier))
-        start_idx, end_idx = _resolve_operate_window(rs_time)
+    def update_operate_map(mode: str, timestep_idx: int, carrier: str, zoom: Optional[float], rs_time: List[int], scenario="default"):
+        data = app_data.get_scenario(scenario, carrier)
+        carrier_key = data.OPERATE_HELPER.normalize_carrier(str(carrier))
+        start_idx, end_idx = _resolve_operate_window(rs_time, data=data)
         local_idx = int(timestep_idx) if timestep_idx is not None else 0
         local_idx = max(0, min(max(0, end_idx - start_idx), local_idx))
         t_idx = start_idx + local_idx
 
         if mode == "critical":
             unmet_map = {
-                loc: app_data.OPERATE_HELPER.get_location_max_unmet_fraction_window(loc, carrier_key, start_idx, end_idx)
+                loc: data.OPERATE_HELPER.get_location_max_unmet_fraction_window(loc, carrier_key, start_idx, end_idx)
                 for loc in app_data.INPUT_CITIES.keys()
             }
         else:
             unmet_map = {
-                loc: app_data.OPERATE_HELPER.get_location_unmet_fraction_at_timestep(loc, carrier_key, t_idx)
+                loc: data.OPERATE_HELPER.get_location_unmet_fraction_at_timestep(loc, carrier_key, t_idx)
                 for loc in app_data.INPUT_CITIES.keys()
             }
 
         markers = _build_location_markers(unmet_map)
-        lines, arrows = _build_line_components(mode, carrier_key, t_idx, start_idx, end_idx, zoom)
+        lines, arrows = _build_line_components(mode, carrier_key, t_idx, start_idx, end_idx, zoom, data=data)
         return markers + lines + arrows
 
     @app.callback(
         Output("operate-time-label", "children"),
         Input("operate-timestep", "value"),
-        Input("rs-time", "value"),
+        Input("applied-time", "data"),
     )
     def update_operate_time_label(timestep_idx: int, rs_time: List[int]):
         if not app_data.OPERATE_T:
@@ -747,30 +853,36 @@ def register_operate_callbacks(app):
         Output({"type": "operate-storage-graph", "location": MATCH, "tech": MATCH}, "figure"),
         Input({"type": "operate-storage-mode", "location": MATCH, "tech": MATCH}, "value"),
         Input("dd-carrier", "value"),
-        Input("rs-time", "value"),
+        Input("applied-time", "data"),
+        Input("dd-scenario", "value"),
         State({"type": "operate-storage-mode", "location": MATCH, "tech": MATCH}, "id"),
     )
-    def update_storage_graph(mode: str, carrier: str, rs_time: List[int], storage_id: Dict):
+    def update_storage_graph(mode: str, carrier: str, rs_time: List[int], scenario, storage_id: Dict):
+        data = app_data.get_scenario(scenario, carrier)
         location = storage_id.get("location")
         tech = storage_id.get("tech")
-        carrier_key = app_data.OPERATE_HELPER.normalize_carrier(str(carrier))
+        carrier_key = data.OPERATE_HELPER.normalize_carrier(str(carrier))
         start_idx, end_idx = _resolve_operate_window(rs_time)
-        return _build_storage_figure(location, tech, carrier_key, start_idx, end_idx, mode)
+        return _build_storage_figure(location, tech, carrier_key, start_idx, end_idx, mode, data=data)
 
     @app.callback(
         Output("operate-timestep", "max"),
         Output("operate-timestep", "value"),
         Output("operate-timestep", "marks"),
-        Input("rs-time", "value"),
+        Input("applied-time", "data"),
         State("operate-timestep", "value"),
     )
     def sync_operate_timestep_slider(rs_time: List[int], current_value: Optional[int]):
         start_idx, end_idx = _resolve_operate_window(rs_time)
         window_len = max(1, end_idx - start_idx + 1)
         max_val = window_len - 1
+        marks = {
+            0: app_data.OPERATE_TIMESTEPS[start_idx].strftime("%d %b %H:%M"),
+            max_val: app_data.OPERATE_TIMESTEPS[end_idx].strftime("%d %b %H:%M"),
+        }
         if current_value is None:
-            return max_val, 0, {}
-        return max_val, min(int(current_value), max_val), {}
+            return max_val, 0, marks
+        return max_val, min(int(current_value), max_val), marks
 
     marker_inputs = [Input(f"operate-marker-{c}", "n_clicks") for c in app_data.INPUT_CITIES.keys()]
     route_inputs = [Input(f"operate-route-{a}-{b}", "n_clicks") for a, b in app_data.OPERATE_CONNECTIONS]
@@ -811,14 +923,16 @@ def register_operate_callbacks(app):
         Output("operate-info-content", "children"),
         Input("operate-selected-entity", "data"),
         Input("dd-carrier", "value"),
-        Input("rs-time", "value"),
+        Input("applied-time", "data"),
+        Input("dd-scenario", "value"),
     )
-    def update_operate_info(selection: Optional[Dict], carrier: str, rs_time: List[int]):
+    def update_operate_info(selection: Optional[Dict], carrier: str, rs_time: List[int], scenario="default"):
+        data = app_data.get_scenario(scenario, carrier)
         if not selection:
             return _default_operate_panel_content()
 
-        carrier_key = app_data.OPERATE_HELPER.normalize_carrier(str(carrier))
-        start_idx, end_idx = _resolve_operate_window(rs_time)
+        carrier_key = data.OPERATE_HELPER.normalize_carrier(str(carrier))
+        start_idx, end_idx = _resolve_operate_window(rs_time, data=data)
 
         if selection.get("type") == "line":
             a = selection.get("a")
@@ -826,8 +940,11 @@ def register_operate_callbacks(app):
             if not a or not b:
                 return _default_operate_panel_content()
 
-            fig = _build_line_timeseries_figure(a, b, carrier_key, start_idx, end_idx)
-            helper = app_data.OPERATE_HELPER
+            if not any(data.OPERATE_HELPER.get_line_ids_for_pair(a, b)):
+                return [html.P(f"No {carrier_key} transmission between {a} and {b}.")]
+
+            fig = _build_line_timeseries_figure(a, b, carrier_key, start_idx, end_idx, data=data)
+            helper = data.OPERATE_HELPER
             a_to_b, b_to_a = helper.get_line_ids_for_pair(a, b)
             cap = max(helper.get_line_capacity(a_to_b or ""), helper.get_line_capacity(b_to_a or ""))
             peak = 0.0
@@ -835,11 +952,11 @@ def register_operate_callbacks(app):
             a_to_b_total = 0.0
             b_to_a_total = 0.0
             if a_to_b:
-                peak = max(peak, helper.get_line_peak_flow_window(a_to_b, carrier_key, start_idx, end_idx))
+                peak = max(peak, helper.get_line_power_window(a_to_b, carrier_key, start_idx, end_idx).max())
                 a_to_b_total = helper.get_line_total_flow_window(a_to_b, carrier_key, start_idx, end_idx)
                 total += a_to_b_total
             if b_to_a:
-                peak = max(peak, helper.get_line_peak_flow_window(b_to_a, carrier_key, start_idx, end_idx))
+                peak = max(peak, helper.get_line_power_window(b_to_a, carrier_key, start_idx, end_idx).max())
                 b_to_a_total = helper.get_line_total_flow_window(b_to_a, carrier_key, start_idx, end_idx)
                 total += b_to_a_total
 
@@ -855,7 +972,7 @@ def register_operate_callbacks(app):
             summary = html.Ul(
                 [
                 html.Li(f"Max capacity: {_format_kwh(cap)} kW"),
-                html.Li(f"Peak flow: {_format_kwh(peak)} kWh"),
+                html.Li(f"Peak received power: {_format_kwh(peak)} kW"),
                 html.Li(f"Total flow: {_format_kwh(total)} kWh"),
                 ]
             )
@@ -863,7 +980,7 @@ def register_operate_callbacks(app):
             return [
                 html.H3(title),
                 summary,
-                dcc.Graph(figure=fig, style={"height": "300px"}),
+                dcc.Graph(responsive=True, config=DETAIL_CHART_CONFIG, figure=fig, style={"height": "300px"}),
             ]
 
         if selection.get("type") == "location":
@@ -871,7 +988,7 @@ def register_operate_callbacks(app):
             if not location:
                 return _default_operate_panel_content()
 
-            helper = app_data.OPERATE_HELPER
+            helper = data.OPERATE_HELPER
             kpis = helper.get_location_operate_kpis_window(location, carrier_key, start_idx, end_idx)
             unmet_pct = 0.0
             if kpis["total_demand"] > 0:
@@ -882,11 +999,11 @@ def register_operate_callbacks(app):
                     html.Li(f"Total production: {_format_kwh(kpis['total_production'])} kWh"),
                     html.Li(f"Total unmet: {_format_kwh(kpis['total_unmet'])} kWh"),
                     html.Li(f"Unmet share: {unmet_pct * 100:.1f}%"),
-                    html.Li(f"Variable OPEX: {_format_eur(kpis['total_variable_cost'])}"),
+                    html.Li(f"Carrier-exclusive variable OPEX: {_format_eur(kpis['total_variable_cost'])}"),
                 ]
             )
 
-            tech_cards = _build_location_cards(location, carrier_key, start_idx, end_idx)
+            tech_cards = _build_location_cards(location, carrier_key, start_idx, end_idx, data=data)
 
             return [
                 html.H3(f"{location}"),

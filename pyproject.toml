@@ -32,5 +32,8 @@ calliope-dashboard = "calliope_dashboard._server:main"
 where = ["."]
 include = ["app*", "calliope_dashboard*", "helpers*"]
 
+[tool.setuptools.package-data]
+app = ["assets/*.css", "assets/*.js", "assets/*.woff2", "assets/*LICENSE.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

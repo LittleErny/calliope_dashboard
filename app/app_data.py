@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import math
 import os
+import json
+from types import SimpleNamespace
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pandas as pd
 import xarray as xr
+from dash.exceptions import PreventUpdate
 
 from helpers.inputs_helper import InputsHelper
 from helpers.operate_results_helper import OperateResultsHelper
 from helpers.results_helper import ALL_LOCATIONS, ResultsHelper
+from helpers.carriers import select_carrier
 
 # -----------------------------
 # Paths & loaders
@@ -85,7 +89,12 @@ def _compute_map_center() -> List[float]:
 
 
 MAP_CENTER = _compute_map_center()
-MAP_ZOOM_DEFAULT = 15 if INPUT_RAW_COORDS else 6
+# Fit country-scale and campus-scale models without opening inside one city.
+_coordinate_span = max(
+    max(INPUT_LATITUDES) - min(INPUT_LATITUDES),
+    max(INPUT_LONGITUDES) - min(INPUT_LONGITUDES),
+) if INPUT_RAW_COORDS else 0
+MAP_ZOOM_DEFAULT = max(2, min(15, int(math.log2(360 / max(_coordinate_span, 0.005))) + 1)) if INPUT_RAW_COORDS else 6
 
 INPUT_CONNECTIONS = []
 for line in INPUT_HELPER.get_transmission_lines():
@@ -149,6 +158,86 @@ OPERATE_T = len(OPERATE_TIMESTEPS)
 OPERATE_CARRIERS = OPERATE_HELPER.get_carriers()
 OPERATE_CONNECTIONS = OPERATE_HELPER.get_physical_lines()
 
+# Each callback selects a bundle explicitly; changing a dropdown never mutates
+# process-wide model data used by another browser session.
+_BUNDLE_NAMES = [
+    "INPUT_HELPER", "RESULTS_HELPER", "OPERATE_HELPER", "INPUT_TIMESTEPS",
+    "INPUT_T", "TIME_INDEX", "T", "OPERATE_TIMESTEPS", "OPERATE_T",
+    "LOADED_INPUTS", "LOADED_RESULTS", "LOADED_OPERATE_INPUTS", "LOADED_OPERATE_RESULTS",
+]
+SCENARIO_DATA = {"default": SimpleNamespace(**{name: globals()[name] for name in _BUNDLE_NAMES})}
+SCENARIO_OPTIONS = [{"label": "Default", "value": "default"}]
+DEFAULT_SCENARIO = "default"
+_manifest_path = MODEL_DIR / "dashboard_scenarios.json"
+if _manifest_path.is_file():
+    _manifest = json.loads(_manifest_path.read_text())
+    SCENARIO_OPTIONS = []
+    for entry in _manifest["scenarios"]:
+        scenario_id = entry["id"]
+        SCENARIO_OPTIONS.append({"label": entry["label"], "value": scenario_id})
+        if scenario_id == "default":
+            continue
+        planning_path = MODEL_DIR / entry["planning"]
+        operate_path = MODEL_DIR / entry["operate"]
+        inputs = _load_netcdf_group(planning_path, "inputs")
+        results = _load_netcdf_group(planning_path, "results")
+        operate_inputs = _load_netcdf_group(operate_path, "inputs")
+        operate_results = _load_netcdf_group(operate_path, "results")
+        for dataset in (inputs, results, operate_inputs, operate_results):
+            dataset.attrs["calliope_version"] = CALLIOPE_VERSION
+        # Shared controls/map IDs require the same nodes, geography and time
+        # axis. Investment scenarios may enable different techs and carriers.
+        for reference, candidate in [(LOADED_INPUTS, inputs), (LOADED_OPERATE_INPUTS, operate_inputs)]:
+            for coordinate in ("nodes", "timesteps"):
+                if not reference[coordinate].equals(candidate[coordinate]):
+                    raise ValueError(f"Scenario {scenario_id} has incompatible {coordinate}")
+            for coordinate in ("latitude", "longitude"):
+                if (coordinate in reference) != (coordinate in candidate) or (
+                    coordinate in reference and not reference[coordinate].equals(candidate[coordinate])
+                ):
+                    raise ValueError(f"Scenario {scenario_id} has incompatible {coordinate}")
+        if InputsHelper(inputs).get_transmission_lines() != INPUT_HELPER.get_transmission_lines():
+            raise ValueError(f"Scenario {scenario_id} has incompatible map connections")
+        values = {name: globals()[name] for name in _BUNDLE_NAMES}
+        values.update(
+            INPUT_HELPER=InputsHelper(inputs), RESULTS_HELPER=ResultsHelper(results, inputs),
+            OPERATE_HELPER=OperateResultsHelper(operate_results, operate_inputs),
+            LOADED_INPUTS=inputs, LOADED_RESULTS=results,
+            LOADED_OPERATE_INPUTS=operate_inputs, LOADED_OPERATE_RESULTS=operate_results,
+        )
+        SCENARIO_DATA[scenario_id] = SimpleNamespace(**values)
+    DEFAULT_SCENARIO = _manifest.get("default", "default")
+SCENARIOS = list(SCENARIO_DATA)
+
+
+_CARRIER_BUNDLES = {}
+
+
+def get_scenario(scenario_id: str | None = None, carrier: str | None = None):
+    """Return one immutable selection of inputs/results and its cached helpers."""
+    scenario_id = scenario_id or DEFAULT_SCENARIO
+    bundle = SCENARIO_DATA[scenario_id]
+    if carrier is None:
+        return bundle
+    if carrier not in bundle.LOADED_INPUTS.carriers.values:
+        # A scenario switch can arrive before the carrier selector updates.
+        # Wait for its valid new value instead of selecting unavailable data
+        # or briefly showing another carrier under the stale label.
+        raise PreventUpdate
+    key = (scenario_id, carrier)
+    if key not in _CARRIER_BUNDLES:
+        inputs, results = select_carrier(bundle.LOADED_INPUTS, bundle.LOADED_RESULTS, carrier)
+        operate_inputs, operate_results = select_carrier(bundle.LOADED_OPERATE_INPUTS, bundle.LOADED_OPERATE_RESULTS, carrier)
+        values = vars(bundle).copy()
+        values.update(
+            INPUT_HELPER=InputsHelper(inputs), RESULTS_HELPER=bundle.RESULTS_HELPER.for_carrier(carrier),
+            OPERATE_HELPER=bundle.OPERATE_HELPER.for_carrier(carrier),
+            LOADED_INPUTS=inputs, LOADED_RESULTS=results,
+            LOADED_OPERATE_INPUTS=operate_inputs, LOADED_OPERATE_RESULTS=operate_results,
+        )
+        _CARRIER_BUNDLES[key] = SimpleNamespace(**values)
+    return _CARRIER_BUNDLES[key]
+
 # -----------------------------
 # Model metadata
 # -----------------------------
@@ -165,10 +254,10 @@ def get_model_name() -> Optional[str]:
 
 R_EARTH = 6371000.0
 ZOOM_REF = 6
-L_REF_M = 25000
-W_REF_M = 18000
-L_MIN_M, L_MAX_M = 4000, 80000
-W_MIN_M, W_MAX_M = 3000, 60000
+L_REF_M = 30000
+W_REF_M = 22000
+L_MAX_M = 80000
+W_MAX_M = 60000
 
 
 def _deg2rad(x: float) -> float:
@@ -208,18 +297,49 @@ def head_sizes_for_zoom(zoom: float | None) -> Tuple[float, float]:
     """Choose arrowhead length/width so the screen size stays roughly constant."""
     z = zoom if zoom is not None else ZOOM_REF
     factor = 2 ** (ZOOM_REF - z)
-    l_val = max(L_MIN_M, min(L_MAX_M, L_REF_M * factor))
-    w_val = max(W_MIN_M, min(W_MAX_M, W_REF_M * factor))
+    l_val = min(L_MAX_M, L_REF_M * factor)
+    w_val = min(W_MAX_M, W_REF_M * factor)
     return l_val, w_val
 
 
-def arrowhead_triangle_at_b(a: List[float], b: List[float], length_m: float, width_m: float) -> List[List[float]]:
-    """Build a triangular arrowhead at destination B, pointing A -> B."""
-    tip = b
-    dir_ab = initial_bearing_deg(a, b)
-    base_center = destination_point(tip[0], tip[1], length_m, (dir_ab + 180) % 360)
-    left_bearing = (dir_ab + 90) % 360
-    right_bearing = (dir_ab + 270) % 360
-    base_left = destination_point(base_center[0], base_center[1], width_m / 2.0, left_bearing)
-    base_right = destination_point(base_center[0], base_center[1], width_m / 2.0, right_bearing)
-    return [tip, base_left, base_right]
+def arrowhead_triangle_at_b(a: List[float], b: List[float], length_m: float, width_m: float,
+                            zoom: float | None = None, marker: str = "circle") -> List[List[float]]:
+    """Place the head at the receiving end, just outside its marker.
+
+    Work in Leaflet's Mercator plane so the head stays on the straight line.
+    Screen-pixel clearance keeps it beside the marker when zoom changes.
+    """
+    world = 256 * 2 ** (ZOOM_REF if zoom is None else zoom)
+
+    def project(point):
+        lat = math.radians(max(-85.0511, min(85.0511, point[0])))
+        return ((point[1] + 180) / 360 * world,
+                (1 - math.asinh(math.tan(lat)) / math.pi) / 2 * world)
+
+    def unproject(x, y):
+        return [math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / world)))),
+                x / world * 360 - 180]
+
+    ax, ay = project(a)
+    bx, by = project(b)
+    distance = math.hypot(bx - ax, by - ay)
+    if distance < 1:
+        return []
+    ux, uy = (bx - ax) / distance, (by - ay) / distance
+    if marker == "pin":
+        # A Leaflet pin is anchored at its bottom, with its body above it.
+        across = 16 / abs(ux) if abs(ux) > 1e-9 else math.inf
+        vertical = (44 if uy > 0 else 4) / abs(uy) if abs(uy) > 1e-9 else math.inf
+        gap = min(across, vertical) + 5
+    else:
+        gap = 17  # Operate circle radius 12 px plus a visible gap.
+    available = distance - gap - 5
+    if available < 3:
+        return []
+    meters_per_pixel = 2 * math.pi * R_EARTH * math.cos(math.radians((a[0] + b[0]) / 2)) / world
+    length = min(length_m / meters_per_pixel, available * .6)
+    half_width = min(width_m / meters_per_pixel / 2, length * .6)
+    tx, ty = bx - ux * gap, by - uy * gap
+    cx, cy = tx - ux * length, ty - uy * length
+    return [unproject(tx, ty), unproject(cx - uy * half_width, cy + ux * half_width),
+            unproject(cx + uy * half_width, cy - ux * half_width)]

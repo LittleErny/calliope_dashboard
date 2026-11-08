@@ -8,10 +8,10 @@ from app import app_data
 
 def layout_results_operate() -> html.Div:
     return html.Div(
-        style={"display": "flex", "gap": "12px", "alignItems": "flex-start"},
+        className="model-view",
         children=[
             html.Div(
-                style={"flex": "2", "padding": "10px"},
+                className="model-map-panel",
                 children=[
                     html.Div("Operate mode", style={"fontSize": "14px", "fontWeight": "800", "marginBottom": "8px"}),
                     dcc.Store(id="operate-selected-entity", data=None),
@@ -19,14 +19,14 @@ def layout_results_operate() -> html.Div:
                         id="operate-map",
                         center=app_data.MAP_CENTER,
                         zoom=app_data.MAP_ZOOM_DEFAULT,
-                        style={"width": "100%", "height": "600px"},
+                        className="model-map",
                         children=[
                             dl.TileLayer(),
                             dl.LayerGroup(id="operate-map-layer"),
                         ],
                     ),
                     html.Div(
-                        style={"display": "flex", "gap": "12px", "alignItems": "center", "marginTop": "10px"},
+                        style={"display": "flex", "gap": "12px", "alignItems": "center", "marginTop": "10px", "flexWrap": "wrap"},
                         children=[
                             html.Div(
                                 [
@@ -71,6 +71,7 @@ def layout_results_operate() -> html.Div:
             ),
             html.Div(
                 id="operate-info-panel",
+                className="model-info-panel",
                 style={
                     "flex": "1",
                     "padding": "10px",
@@ -79,7 +80,6 @@ def layout_results_operate() -> html.Div:
                     "backgroundColor": "white",
                     "display": "flex",
                     "flexDirection": "column",
-                    "height": "90vh",
                 },
                 children=[
                     html.Div(

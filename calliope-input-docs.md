@@ -44,3 +44,20 @@ defines all possible constraints.
 Operate mode keeps fixed capacities in its inputs. The dashboard reads
 `flow_cap` and `storage_cap` from the operate NetCDF `inputs` group because
 those arrays are not repeated in operate `results`.
+
+## Interpretation and source provenance
+
+Inputs maps require exported `latitude`/`longitude`. Coordinates added to YAML
+after a solve do not appear in its historical NetCDF. Without them, the map has
+no selectable node markers; non-map result views can still be available.
+
+Supply limits respect `source_unit` (absolute/per-capacity/per-area), available
+area, capacity limits and efficiencies. Missing optional capacity bounds mean
+unbounded limits, not a zero-size plant. Required-data errors are surfaced rather
+than converted to plausible values. Source YAML generation uses the newer
+fork's `table` / `inputs` fields; see [environment setup](docs/environments.md).
+
+The separate THD Operate runner overrides the fixed `flow_cap` math default to
+zero for its fully specified fleet, avoiding infinity on masked carrier entries.
+This is a local solve workaround, not a change to the dashboard's interpretation
+of missing input upper bounds. See [current progress](docs/dashboard-progress-2026-11-07.md).

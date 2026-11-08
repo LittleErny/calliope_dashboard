@@ -21,6 +21,39 @@ templates:
       dims: costs
 
 techs:
+  heat_demand:
+    name: Heat Demand
+    color: "#a63832"
+    base_tech: demand
+    carrier_in: heat
+
+  gas_boiler:
+    name: Gas Boiler
+    color: "#bb6633"
+    base_tech: supply
+    carrier_out: heat
+    source_use_max: .inf
+    flow_cap_max: 4000000
+    lifetime: 20
+    cost_interest_rate: {data: 0.10, index: monetary, dims: costs}
+    cost_flow_cap: {data: 150, index: monetary, dims: costs}
+    cost_om_annual: {data: 5, index: monetary, dims: costs}
+    cost_flow_out: {data: [0.06, 0.20], index: [monetary, co2], dims: costs}
+
+  solar_thermal:
+    name: Solar Thermal
+    color: "#e89b23"
+    base_tech: supply
+    carrier_out: heat
+    source_unit: per_cap
+    flow_out_parasitic_eff: 0.9
+    flow_cap_max: 1500000
+    lifetime: 25
+    cost_interest_rate: {data: 0.10, index: monetary, dims: costs}
+    cost_flow_cap: {data: 1000, index: monetary, dims: costs}
+    cost_om_annual: {data: 10, index: monetary, dims: costs}
+    cost_flow_out: {data: [0.002, 0], index: [monetary, co2], dims: costs}
+
   pv:
     name: Solar Photovoltaic Power
     color: "#F9D956"

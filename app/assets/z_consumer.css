@@ -1,0 +1,235 @@
+/* A self-hosted typeface keeps the dashboard usable without a font service. */
+@font-face {
+    font-family: Geist;
+    src: url('/assets/geist-latin.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+@font-face {
+    font-family: Geist;
+    src: url('/assets/geist-latin-ext.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    unicode-range: U+0100-024F, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0;
+}
+:root {
+    --ink: #192d3d;
+    --muted: #526776;
+    --accent: #245d7d;
+    --stroke: #dce6e7;
+    --canvas: #f4f7f5;
+    --surface: #fff;
+}
+.dashboard-root { min-height: 100vh; background: var(--canvas); color: var(--ink); font-family: Geist, Arial, sans-serif; }
+button, input, .Select-control, .dash-table-container { font-family: inherit; }
+.dashboard-header { padding: 28px clamp(20px, 3vw, 48px) 24px; background: #fff; border-color: var(--stroke); gap: 32px; }
+.dashboard-model-heading { gap: 32px; }
+.dashboard-identity { flex-basis: 255px; }
+.dashboard-title { color: var(--ink); font-size: 21px; font-weight: 750; letter-spacing: -.035em; }
+.dashboard-model-name { color: var(--muted); font-size: 14px; margin-top: 8px; }
+.dashboard-version { color: #647887; }
+.filter-label, .planning-filter-label { color: var(--muted); font-weight: 650; font-size: 12px; }
+.model-selectors { gap: 14px; }
+.model-selectors .Select-control, .planning-selection-filter .Select-control, .time-date-inputs input {
+    border: 1px solid #cddbdc; border-radius: 14px; background: white; box-shadow: none;
+}
+.model-selectors .Select-control { height: 48px; }
+.model-selectors .Select-value, .model-selectors .Select-placeholder { line-height: 46px !important; }
+.model-selectors .Select-input { height: 46px; }
+.Select-menu-outer { border-radius: 14px; overflow: hidden; }
+.dashboard-filters { max-width: 610px; padding: 16px 18px 10px; border-radius: 20px; background: #f5f8f7; border-color: #e2ebea; }
+.time-date-inputs input { height: 48px; }
+#apply-time { height: 48px; border-radius: 999px; padding: 0 20px; background: var(--accent); border-color: var(--accent); }
+#apply-time:hover:not(:disabled) { background: #194b67; }
+#apply-time:disabled { color: #687d89; background: #e4ebeb; border-color: #e4ebeb; }
+#time-status { padding: 4px 9px; font-size: 11px; }
+#rs-time .rc-slider-handle { width: 18px; height: 18px; margin-top: -7px; border-color: var(--accent); }
+#rs-time .rc-slider-track { background: var(--accent); }
+.dashboard-nav { padding: 10px clamp(20px, 3vw, 48px); border-color: var(--stroke); }
+#tabs-mode { max-width: 700px; gap: 5px; }
+#tabs-mode .tab { border-radius: 999px; border: 0 !important; padding: 12px 18px !important; color: var(--muted) !important; }
+#tabs-mode .tab--selected { color: #fff !important; background: var(--ink) !important; }
+#page-content { max-width: 1700px; margin: 0 auto; padding: 34px clamp(20px, 3vw, 48px) 56px !important; }
+.planning-page-heading { margin-bottom: 26px; }
+.planning-page-heading h1 { color: var(--ink); font-size: clamp(27px, 2.6vw, 36px); font-weight: 750; letter-spacing: -.045em; }
+.planning-page-heading p { color: var(--muted); font-size: 15px; margin-top: 8px; }
+.planning-toolbar { border: 1px solid var(--stroke); border-radius: 22px; padding: 20px 22px; gap: 26px; }
+.planning-view-filter { min-width: 250px; }
+.planning-view-filter #plan-view-mode { gap: 4px !important; padding: 4px; background: #eff4f3; border-radius: 999px; }
+.planning-view-filter #plan-view-mode label { position: relative; display: flex !important; flex: 1 1 0; align-items: center; justify-content: center; min-width: 0; min-height: 38px; padding: 0 10px; border-radius: 999px; color: #405b68; font-size: 13px; font-weight: 600; line-height: 1.2; text-align: center; cursor: pointer; }
+.planning-view-filter #plan-view-mode label:has(input:checked) { color: var(--ink); background: white; box-shadow: 0 1px 4px #1a3e451a; }
+.planning-view-filter #plan-view-mode input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.planning-view-filter #plan-view-mode label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.planning-selection-filter .Select-control { min-height: 46px; }
+.planning-selection-filter .Select-value, .planning-selection-filter .Select-placeholder { line-height: 44px !important; }
+#plan-kpi-strip { margin-top: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+#plan-kpi-strip > .planning-kpi, #plan-kpi-strip > .planning-kpi:nth-child(n) { border: 1px solid var(--stroke); border-radius: 20px; background: var(--surface); padding: 20px 22px; }
+.planning-kpi > div:first-child { color: var(--muted); font-size: 13px !important; min-height: 0; }
+.planning-kpi-heading { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.planning-kpi-heading .coverage-help { margin-top: 0; }
+.planning-kpi-heading .coverage-help-tooltip { width: min(320px, 100%); text-align: left; font-weight: 400; }
+.planning-kpi:has(.coverage-help:hover), .planning-kpi:has(.coverage-help:focus) { position: relative; z-index: 10; }
+.planning-kpi > div:nth-child(2) { margin-top: 12px !important; color: var(--ink); font-size: clamp(22px, 2vw, 27px) !important; font-weight: 700 !important; letter-spacing: -.035em; }
+.planning-cost-note { margin: 14px 2px 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.planning-section-heading { margin: 36px 0 16px; font-size: 21px; font-weight: 700; letter-spacing: -.025em; color: var(--ink); }
+.planning-summary-charts { gap: 16px; }
+.planning-chart-card { padding: 22px; border-radius: 22px; border-color: var(--stroke); color: var(--ink); }
+.planning-chart-card > div:first-child { font-size: 15px !important; font-weight: 700 !important; }
+.planning-details { margin-top: 16px; }
+.model-view { gap: 16px; }
+.model-map-panel, .model-info-panel { padding: 18px !important; border: 1px solid var(--stroke) !important; border-radius: 22px !important; background: #fff; }
+.model-map { border-radius: 14px; }
+.model-map-panel > div:first-child { font-size: 16px !important; margin-bottom: 14px !important; }
+.model-info-panel h3 { color: var(--ink); letter-spacing: -.02em; }
+.model-info-panel p { color: var(--muted); line-height: 1.5; }
+.coverage-fullscreen { min-width: 44px; min-height: 44px; border-radius: 999px; }
+@media (max-width: 1150px) {
+    .dashboard-header { gap: 20px; }
+    #plan-kpi-strip > .planning-kpi:nth-child(n) { border: 1px solid var(--stroke); }
+}
+@media (max-width: 760px) {
+    .dashboard-header { padding: 20px; }
+    .dashboard-nav { padding: 10px 16px; }
+    #tabs-mode .tab { padding: 11px 8px !important; }
+    #page-content { padding: 26px 16px 48px !important; }
+    .planning-toolbar { padding: 18px; }
+    .planning-view-filter { min-width: 0; width: 100%; }
+    .planning-view-filter #plan-view-mode label { flex: 1; justify-content: center; }
+    #plan-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #plan-kpi-strip > .planning-kpi:nth-child(n) { padding: 18px; }
+    .planning-chart-card { padding: 18px; }
+}
+@media (max-width: 400px) {
+    .planning-kpi > div:nth-child(2) { font-size: 20px !important; }
+    #tabs-mode .tab { font-size: 11px; }
+    .time-date-inputs input { font-size: 11px; }
+}
+@media (min-width: 761px) and (max-width: 1450px) {
+    .dashboard-model-heading { flex-direction: column; gap: 14px; }
+    .dashboard-identity { flex: none; min-width: 0; }
+    .model-selectors { flex: none; width: 100%; min-width: 0; }
+}
+@media (max-width: 760px) {
+    .dashboard-identity { flex: none; min-width: 0; }
+}
+
+/* Global model filters form one compact row; time editing opens on demand. */
+.dashboard-header {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) minmax(310px, 1fr) minmax(340px, 1fr);
+    align-items: end;
+    gap: 20px;
+    padding: 16px clamp(20px, 3vw, 48px);
+}
+.dashboard-model-heading { display: contents; }
+.dashboard-identity { min-width: 0; align-self: center; }
+.dashboard-title { font-size: 19px; }
+.dashboard-model-name { margin-top: 4px; font-size: 13px; }
+.dashboard-version { margin-top: 2px; }
+.model-selectors { min-width: 0; width: 100%; max-width: none; grid-template-columns: minmax(0, 1.5fr) minmax(110px, 1fr); gap: 10px; }
+.dashboard-filters { min-width: 0; max-width: none; padding: 0; border: 0; background: transparent; }
+.time-window-control { position: relative; }
+.time-summary { display: flex; align-items: center; gap: 10px; min-height: 72px; padding: 10px 14px; background: #f5f8f7; border: 1px solid var(--stroke); border-radius: 16px; cursor: pointer; list-style: none; }
+.time-summary::-webkit-details-marker { display: none; }
+.time-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.time-summary-text { min-width: 0; flex: 1; }
+.time-summary .filter-label { margin: 0 0 3px; line-height: 1.2; }
+.applied-time-summary { display: block; color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.time-summary-chevron { color: var(--muted); font-size: 20px; line-height: 1; }
+.time-window-control[open] .time-summary-chevron { transform: rotate(180deg); }
+.time-editor-hint { margin: 14px 2px 9px; color: var(--muted); font-size: 12px; }
+.time-window-control[open] { padding: 0 0 8px; }
+.dashboard-nav { padding-top: 5px; padding-bottom: 5px; }
+#page-content { padding-top: 24px !important; }
+.planning-page-heading { margin-bottom: 18px; }
+.planning-page-heading h1 { font-size: clamp(26px, 2.3vw, 32px); }
+.planning-toolbar { padding: 14px 18px; }
+#plan-kpi-strip { margin-top: 12px; gap: 10px; }
+#plan-kpi-strip > .planning-kpi:nth-child(n) { padding: 16px 18px; }
+.planning-kpi > div:nth-child(2) { margin-top: 8px !important; font-size: clamp(20px, 1.7vw, 24px) !important; }
+.planning-section-heading { margin: 26px 0 12px; }
+.planning-chart-card { padding: 18px; }
+.model-map-panel, .model-info-panel { padding: 14px !important; }
+@media (min-width: 1200px) {
+    #plan-kpi-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .planning-kpi > div:first-child { min-height: 34px; }
+}
+@media (max-width: 1050px) {
+    .dashboard-header { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 18px; }
+    .dashboard-identity { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+    .dashboard-header { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 12px; }
+    .dashboard-identity { grid-column: auto; }
+    .model-selectors { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .time-summary { min-height: 64px; }
+    #page-content { padding-top: 20px !important; }
+    .planning-toolbar { padding: 14px; }
+    #plan-kpi-strip > .planning-kpi:nth-child(n) { padding: 14px; }
+}
+.dashboard-header { align-items: start; }
+.dashboard-identity { align-self: start; padding-top: 4px; }
+
+/* A shared canvas keeps the global controls aligned with each page. */
+.dashboard-shell { background: #fff; }
+.dashboard-header, .dashboard-nav, #page-content { width: 100%; max-width: 1700px; margin-left: auto; margin-right: auto; padding-left: clamp(12px, 1.5vw, 24px) !important; padding-right: clamp(12px, 1.5vw, 24px) !important; }
+.chart-title-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.chart-title { font-size: 15px; font-weight: 700; }
+.chart-interaction-hint { color: var(--muted); font-size: 11px; font-weight: 400; }
+.planning-chart-card .modebar { top: 4px !important; }
+@media (max-width: 760px) {
+    .chart-interaction-hint { display: none; }
+}
+@media (max-width: 600px) {
+    #plan-production-ts { height: 480px !important; }
+    #plan-co2-ts { height: 320px !important; }
+}
+
+/* Header and summary use the same six-column page grid on wide screens. */
+@media (min-width: 1200px) {
+    .dashboard-header { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+    .dashboard-identity { grid-column: span 1; }
+    .model-selectors { grid-column: span 2; }
+    .dashboard-filters { grid-column: span 3; }
+}
+@media (min-width: 1051px) and (max-width: 1199px) {
+    .dashboard-header { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+}
+
+/* Keep the expanded time editor and its summary inside one surface. */
+.time-window-control[open] {
+    border: 1px solid var(--stroke);
+    border-radius: 16px;
+    background: #f5f8f7;
+    padding: 0 14px 8px;
+}
+.time-window-control[open] .time-summary {
+    margin: 0 -14px;
+    min-height: 0;
+    padding: 14px 14px 3px;
+    border: 0;
+    border-radius: 15px 15px 0 0;
+    background: transparent;
+}
+
+.time-window-control[open] .time-editor-hint { margin-top: 4px; }
+
+/* Align the planning filters with the same columns as the KPI row. */
+@media (min-width: 761px) {
+    .planning-toolbar {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        column-gap: 10px;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .planning-view-filter { grid-column: 1; margin-left: 18px; max-width: 300px; }
+    .planning-selection-filter { grid-column: 2; width: 100%; max-width: none; }
+}
+@media (min-width: 1200px) {
+    .planning-toolbar { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .planning-view-filter { grid-column: 1 / span 2; }
+    .planning-selection-filter { grid-column: 3 / span 2; }
+}

@@ -22,3 +22,13 @@ git switch migration/calliope-0.7.0-dev7
 Do not merge the helper and environment files wholesale between these branches.
 Shared UI fixes can be cherry-picked when they do not depend on Calliope's data
 schema. Run the branch's own `make setup` and `make check` after switching.
+
+## Current 0.7 checkpoint
+
+The November changes stay on `migration/calliope-0.7.0-dev7`: desktop layout,
+applied dates, adaptive coverage, scenario/carrier isolation, accounting and
+read-error handling. See [the progress report](dashboard-progress-2026-11-07.md).
+Model generation now uses the local fork's newer `table` / `inputs` schema.
+A matching `0.7.0.dev7` version string alone does not establish compatibility;
+after switching/updating environments, verify the Calliope import path and
+follow [the environment instructions](environments.md).

@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from typing import List
-
-import numpy as np
-import pandas as pd
-from dash import Input, Output, html
+from dash import ClientsideFunction, Input, Output, State, html
 
 from app import app_data
 from app.layouts.inputs import layout_inputs
@@ -25,33 +21,68 @@ def layout_for_tab(tab_value: str):
 
 def register_common_callbacks(app):
     @app.callback(
+        Output("dd-carrier", "options"),
+        Output("dd-carrier", "value"),
+        Input("dd-scenario", "value"),
+        State("dd-carrier", "value"),
+    )
+    def update_scenario_carriers(scenario, current):
+        data = app_data.get_scenario(scenario)
+        carriers = data.INPUT_HELPER.inputs.carriers.values.tolist()
+        selected = current if current in carriers else (carriers[0] if carriers else None)
+        return [{"label": carrier, "value": carrier} for carrier in carriers], selected
+
+    app.clientside_callback(
+        "function(n, tab){return [{display:'none'}, ''];}",
+        Output("data-error-banner", "style"),
+        Output("data-error-message", "children"),
+        Input("dismiss-data-error", "n_clicks"),
+        Input("tabs-mode", "value"),
+        prevent_initial_call=True,
+    )
+    @app.callback(
         Output("page-content", "children"),
         Input("tabs-mode", "value"),
     )
     def render_page(tab_value: str):
         return layout_for_tab(tab_value)
 
-    @app.callback(
-        Output("time-label", "children"),
+    # Draft changes stay in the browser. Only Apply changes the store consumed
+    # by the expensive charts and maps, including when another filter changes.
+    app.clientside_callback(
+        ClientsideFunction(namespace="timeWindow", function_name="edit"),
+        Output("rs-time", "value"),
+        Output("draft-time", "data"),
+        Output("time-start-label", "children"),
+        Output("time-end-label", "children"),
+        Output("time-status", "children"),
+        Output("apply-time", "disabled"),
+        Output("time-start-input", "value"),
+        Output("time-end-input", "value"),
+        Output("time-validation", "children"),
+        Output("time-status", "title"),
         Input("rs-time", "value"),
+        Input("applied-time", "data"),
+        Input("time-start-input", "value"),
+        Input("time-end-input", "value"),
+        State("time-timestamps", "data"),
+        State("time-limits", "data"),
+        State("draft-time", "data"),
+        State("time-iso", "data"),
     )
-    def update_time_label(rng: List[int]):
-        i0, i1 = int(rng[0]), int(rng[1])
-        n_label = len(app_data.INPUT_TIMESTEPS) if len(app_data.INPUT_TIMESTEPS) else len(app_data.TIME_INDEX)
-        i0 = max(0, min(n_label - 1, i0))
-        i1 = max(0, min(n_label - 1, i1))
-        if i1 < i0:
-            i0, i1 = i1, i0
-        if len(app_data.INPUT_TIMESTEPS):
-            t0 = app_data.INPUT_TIMESTEPS[i0]
-            t1 = app_data.INPUT_TIMESTEPS[i1]
-        else:
-            t0 = app_data.TIME_INDEX[i0]
-            t1 = app_data.TIME_INDEX[i1]
-
-        def fmt_ts(ts):
-            if isinstance(ts, (pd.Timestamp, np.datetime64)):
-                return pd.Timestamp(ts).strftime("%Y-%m-%d %H:%M")
-            return str(ts)
-
-        return f"{fmt_ts(t0)} → {fmt_ts(t1)}  (idx {i0}-{i1})"
+    app.clientside_callback(
+        """function(applied, timestamps) {
+            if (!applied || !timestamps || !timestamps.length) return 'No timesteps';
+            return timestamps[applied[0]] + ' – ' + timestamps[applied[1]];
+        }""",
+        Output("applied-time-summary", "children"),
+        Input("applied-time", "data"),
+        State("time-timestamps", "data"),
+    )
+    app.clientside_callback(
+        "function(clicks, draft) { return draft.slice(); }",
+        Output("applied-time", "data"),
+        Input("apply-time", "n_clicks"),
+        State("rs-time", "value"),
+        prevent_initial_call=True,
+    )

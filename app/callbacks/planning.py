@@ -48,31 +48,38 @@ def register_planning_callbacks(app):
         Output("plan-tech-dd", "style"),
         Output("plan-location-dd", "value"),
         Output("plan-tech-dd", "value"),
+        Output("plan-tech-dd", "options"),
         Input("plan-view-mode", "value"),
+        Input("dd-carrier", "value"),
+        Input("dd-scenario", "value"),
         State("plan-location-dd", "value"),
         State("plan-tech-dd", "value"),
     )
-    def update_plan_selector(view_mode: str, current_loc: str, current_tech: str):
+    def update_plan_selector(view_mode: str, carrier, scenario, current_loc: str, current_tech: str):
+        techs = app_data.get_scenario(scenario, carrier).RESULTS_HELPER.get_technologies()
+        options = [{"label": tech, "value": tech} for tech in techs]
         if view_mode == "technology":
-            tech_val = current_tech if current_tech in app_data.PLAN_TECHS else (app_data.PLAN_TECHS[0] if app_data.PLAN_TECHS else None)
+            tech_val = current_tech if current_tech in techs else (techs[0] if techs else None)
             valid_locations = [ALL_LOCATIONS, *app_data.PLAN_LOCATIONS]
             loc_val = current_loc if current_loc in valid_locations else ALL_LOCATIONS
             return (
                 "Select technology",
-                {"width": "260px", "display": "none"},
-                {"width": "260px", "display": "block"},
+                {"width": "100%", "display": "none"},
+                {"width": "100%", "display": "block"},
                 loc_val,
                 tech_val,
+                options,
             )
         valid_locations = [ALL_LOCATIONS, *app_data.PLAN_LOCATIONS]
         loc_val = current_loc if current_loc in valid_locations else ALL_LOCATIONS
-        tech_val = current_tech if current_tech in app_data.PLAN_TECHS else (app_data.PLAN_TECHS[0] if app_data.PLAN_TECHS else None)
+        tech_val = current_tech if current_tech in techs else (techs[0] if techs else None)
         return (
             "Select location",
-            {"width": "260px", "display": "block"},
-            {"width": "260px", "display": "none"},
+            {"width": "100%", "display": "block"},
+            {"width": "100%", "display": "none"},
             loc_val,
             tech_val,
+            options,
         )
 
     @app.callback(
@@ -86,7 +93,7 @@ def register_planning_callbacks(app):
         Output("plan-detail-table", "data"),
         Input("dd-scenario", "value"),
         Input("dd-carrier", "value"),
-        Input("rs-time", "value"),
+        Input("applied-time", "data"),
         Input("plan-view-mode", "value"),
         Input("plan-location-dd", "value"),
         Input("plan-tech-dd", "value"),
@@ -101,19 +108,20 @@ def register_planning_callbacks(app):
         selected_tech: str,
         cost_norm: str,
     ):
-        scenario_key = app_data.RESULTS_HELPER.normalize_scenario(str(scenario))
-        carrier_key = app_data.RESULTS_HELPER.normalize_carrier(str(carrier))
-        carrier_label = app_data.RESULTS_HELPER.carrier_label(carrier_key)
+        data = app_data.get_scenario(scenario, carrier)
+        scenario_key = data.RESULTS_HELPER.normalize_scenario(str(scenario))
+        carrier_key = data.RESULTS_HELPER.normalize_carrier(str(carrier))
+        carrier_label = data.RESULTS_HELPER.carrier_label(carrier_key)
 
         i0, i1 = sorted([int(rng[0]), int(rng[1])])
-        i0 = max(0, min(app_data.T - 1, i0))
-        i1 = max(0, min(app_data.T - 1, i1))
-        start_ts = app_data.TIME_INDEX[i0]
-        end_ts = app_data.TIME_INDEX[i1]
+        i0 = max(0, min(data.T - 1, i0))
+        i1 = max(0, min(data.T - 1, i1))
+        start_ts = data.TIME_INDEX[i0]
+        end_ts = data.TIME_INDEX[i1]
 
-        selection = app_data.RESULTS_HELPER.resolve_plan_selection(view_mode, selected_location, selected_tech)
+        selection = data.RESULTS_HELPER.resolve_plan_selection(view_mode, selected_location, selected_tech)
         group_key = selection["group_key"]
-        tech_color_map = app_data.RESULTS_HELPER.get_technology_color_map()
+        tech_color_map = data.RESULTS_HELPER.get_technology_color_map()
 
         def resolve_tech_color(label: str, alpha: Optional[float] = None) -> Optional[str]:
             if group_key != "technology":
@@ -123,7 +131,7 @@ def register_planning_callbacks(app):
                 return base
             return _apply_alpha(base, alpha)
 
-        kpi_vals = app_data.RESULTS_HELPER.get_plan_kpis(
+        kpi_vals = data.RESULTS_HELPER.get_plan_kpis(
             scenario_id=scenario_key,
             carrier=carrier_key,
             start_ts=start_ts,
@@ -134,14 +142,15 @@ def register_planning_callbacks(app):
         )
 
         kpis = [
-            kpi_tile("Investments (CAPEX)", f"€{format_number(kpi_vals['capex'])}"),
-            kpi_tile("Operating costs (OPEX)", f"€{format_number(kpi_vals['opex'])}"),
-            kpi_tile("Installed capacity", f"{format_number(kpi_vals['capacity'])} kW"),
-            kpi_tile(f"Production ({carrier_label})", f"{format_number(kpi_vals['production'])} kWh"),
-            kpi_tile("CO2 emissions", f"{format_number(kpi_vals['co2_kg'])} kg"),
+            kpi_tile("Carrier-exclusive modeled cost", f"€{format_number(kpi_vals['total_cost'])}", help_id="plan-help-cost", help_text="Cost for the selected period: the period's share of annualised investment, fixed and variable operating costs, and any other modeled costs. Excludes shared costs of technologies linked to multiple carriers."),
+            kpi_tile("CAPEX (carrier-exclusive)", f"€{format_number(kpi_vals['capex'])}", help_id="plan-help-capex", help_text="Upfront investment in the selected assets, not the share allocated to the selected period. Excludes shared costs of technologies linked to multiple carriers."),
+            kpi_tile("OPEX (carrier-exclusive)", f"€{format_number(kpi_vals['opex'])}", help_id="plan-help-opex", help_text="Fixed and variable operating costs for the selected period. Excludes shared costs of technologies linked to multiple carriers."),
+            kpi_tile("Installed capacity", f"{format_number(kpi_vals['capacity'])} kW", help_id="plan-help-capacity", help_text="Total installed capacity of the selected assets. It does not change when you select a shorter time period."),
+            kpi_tile(f"Production ({carrier_label})", f"{format_number(kpi_vals['production'])} kWh", help_id="plan-help-production", help_text="Total output of the selected carrier from the selected assets during the selected period."),
+            kpi_tile("CO2 emissions", f"{format_number(kpi_vals['co2_kg'])} kg" if "co2" in data.LOADED_RESULTS.costs else "Not provided", help_id="plan-help-co2", help_text="Modeled operational emissions plus the selected period's share of investment-related emissions. Not provided means the model has no CO2 cost class; it does not mean zero emissions."),
         ]
 
-        cap_group = app_data.RESULTS_HELPER.get_plan_capacity_group(
+        cap_group = data.RESULTS_HELPER.get_plan_capacity_group(
             scenario_id=scenario_key,
             carrier=carrier_key,
             view_mode=view_mode,
@@ -156,17 +165,20 @@ def register_planning_callbacks(app):
             bar_colors = [resolve_tech_color(label) for label in cap_group[group_key]] if group_key == "technology" else None
             if bar_colors and any(c is None for c in bar_colors):
                 bar_colors = None
-            cap_fig.add_trace(go.Bar(x=cap_group[group_key], y=cap_group["carrier_capacity_kw"], marker_color=bar_colors))
-            title = "Installed capacity by technology (kW)" if view_mode == "location" else "Installed capacity by location (kW)"
+            cap_fig.add_trace(go.Bar(
+                x=cap_group[group_key], y=cap_group["carrier_capacity_kw"],
+                orientation="v", marker_color=bar_colors,
+                hovertemplate="%{x}<br>%{y:,.6f} kW<extra></extra>",
+            ))
             cap_fig.update_layout(
-                title=title,
+                title=None,
                 height=320,
                 margin=dict(l=10, r=10, t=45, b=40),
                 xaxis_title=group_key.title(),
                 yaxis_title="kW",
             )
 
-        cost_group = app_data.RESULTS_HELPER.get_plan_cost_group(
+        cost_group = data.RESULTS_HELPER.get_plan_cost_group(
             scenario_id=scenario_key,
             start_ts=start_ts,
             end_ts=end_ts,
@@ -175,43 +187,50 @@ def register_planning_callbacks(app):
             selected_tech=selected_tech,
         )
         if order_keys:
-            cost_group[group_key] = pd.Categorical(cost_group[group_key], categories=order_keys, ordered=True)
+            cost_order = order_keys + [k for k in cost_group[group_key].unique() if k not in order_keys]
+            cost_group[group_key] = pd.Categorical(cost_group[group_key], categories=cost_order, ordered=True)
             cost_group = cost_group.sort_values(group_key)
+        if cost_norm == "per_kw":
+            cost_group = cost_group[cost_group.built_capacity_kw > 0].copy()
 
         if cost_group.empty:
             cost_fig = empty_figure("No data for the current selection.")
         else:
             if cost_norm == "per_kw":
                 denom = cost_group["built_capacity_kw"].replace({0: np.nan})
-                cost_group["capex_eur"] = cost_group["capex_eur"] / denom
+                cost_group["annualised_investment_eur"] = cost_group["annualised_investment_eur"] / denom
                 cost_group["fixed_opex_eur"] = cost_group["fixed_opex_eur"] / denom
                 cost_group["variable_opex_eur"] = cost_group["variable_opex_eur"] / denom
-                cost_group = cost_group.fillna(0.0)
+                cost_group["other_costs_eur"] = cost_group["other_costs_eur"] / denom
+                cost_group[["annualised_investment_eur", "fixed_opex_eur", "variable_opex_eur"]] = cost_group[
+                    ["annualised_investment_eur", "fixed_opex_eur", "variable_opex_eur"]
+                ].fillna(0.0)
                 y_title = "€/kW"
             else:
                 y_title = "€"
 
             cost_fig = go.Figure()
-            base_colors = [resolve_tech_color(label) for label in cost_group[group_key]] if group_key == "technology" else None
-            if base_colors and any(c is None for c in base_colors):
-                base_colors = None
-            capex_colors = [_apply_alpha(c, 0.95) for c in base_colors] if base_colors else None
-            fixed_colors = [_apply_alpha(c, 0.65) for c in base_colors] if base_colors else None
-            var_colors = [_apply_alpha(c, 0.4) for c in base_colors] if base_colors else None
-            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["capex_eur"], name="CAPEX", marker_color=capex_colors))
-            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["fixed_opex_eur"], name="Fixed OPEX", marker_color=fixed_colors))
-            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["variable_opex_eur"], name="Variable OPEX", marker_color=var_colors))
+            # Cost legend describes cost components, so each component must
+            # keep the same color across every technology or location.
+            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["annualised_investment_eur"], orientation="v", name="Annualised investment", marker_color="#3769aa"))
+            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["fixed_opex_eur"], orientation="v", name="Fixed OPEX", marker_color="#78a0cf"))
+            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["variable_opex_eur"], orientation="v", name="Variable OPEX", marker_color="#b7cfe8"))
+            if cost_group.other_costs_eur.abs().max() > 1e-6:
+                cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["other_costs_eur"], orientation="v", name="Other / residual", marker_color="#8a97a5"))
+            cost_fig.update_traces(hovertemplate=f"%{{x}}<br>%{{y:,.9f}} {y_title}<extra>%{{fullData.name}}</extra>")
             cost_fig.update_layout(
-                barmode="stack",
-                title="Cost breakdown (€)" if cost_norm == "absolute" else "Cost breakdown (€/kW)",
+                barmode="relative",
+                # The card heading and axis already describe the cost units.
+                # A second title collides with the wrapped legend on laptops.
+                title=None,
                 height=320,
                 margin=dict(l=10, r=10, t=45, b=40),
-                yaxis_title=y_title,
                 xaxis_title=group_key.title(),
+                yaxis_title=y_title,
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
 
-        co2_group = app_data.RESULTS_HELPER.get_plan_co2_group(
+        co2_group = data.RESULTS_HELPER.get_plan_co2_group(
             scenario_id=scenario_key,
             start_ts=start_ts,
             end_ts=end_ts,
@@ -220,7 +239,8 @@ def register_planning_callbacks(app):
             selected_tech=selected_tech,
         )
         if order_keys and not co2_group.empty:
-            co2_group[group_key] = pd.Categorical(co2_group[group_key], categories=order_keys, ordered=True)
+            co2_order = order_keys + [k for k in co2_group[group_key].unique() if k not in order_keys]
+            co2_group[group_key] = pd.Categorical(co2_group[group_key], categories=co2_order, ordered=True)
             co2_group = co2_group.sort_values(group_key)
 
         if co2_group.empty:
@@ -230,16 +250,20 @@ def register_planning_callbacks(app):
             co2_colors = [resolve_tech_color(label) for label in co2_group[group_key]] if group_key == "technology" else None
             if co2_colors and any(c is None for c in co2_colors):
                 co2_colors = None
-            co2_fig.add_trace(go.Bar(x=co2_group[group_key], y=co2_group["co2_kg"], name="CO2", marker_color=co2_colors))
+            co2_fig.add_trace(go.Bar(
+                x=co2_group[group_key], y=co2_group["co2_kg"], orientation="v",
+                name="CO2", marker_color=co2_colors, width=0.35,
+                hovertemplate="%{x}<br>%{y:,.6f} kg<extra></extra>",
+            ))
             co2_fig.update_layout(
-                title="CO2 breakdown (kg)",
+                title=None,
                 height=320,
                 margin=dict(l=10, r=10, t=45, b=40),
-                yaxis_title="kg",
                 xaxis_title=group_key.title(),
+                yaxis_title="kg",
             )
 
-        co2_series = app_data.RESULTS_HELPER.get_plan_co2_timeseries(
+        co2_series = data.RESULTS_HELPER.get_plan_co2_timeseries(
             scenario_id=scenario_key,
             start_ts=start_ts,
             end_ts=end_ts,
@@ -256,7 +280,7 @@ def register_planning_callbacks(app):
                 value_col="co2_kg",
                 group_col="group_label",
                 max_points=1200,
-                how="mean",
+                how="sum",
             )
             co2_ts_fig = go.Figure()
             for label in co2_series["group_label"].unique():
@@ -267,15 +291,15 @@ def register_planning_callbacks(app):
                     trace_kwargs["line"] = dict(color=line_color)
                 co2_ts_fig.add_trace(go.Scattergl(**trace_kwargs))
             co2_ts_fig.update_layout(
-                title="CO2 over time",
+                title=None,
                 height=260,
                 margin=dict(l=10, r=10, t=45, b=30),
-                xaxis_title="Time",
+                xaxis_title=f"Time · CO2 total per {co2_series.attrs['interval']}",
                 yaxis=dict(title="kg", rangemode="tozero"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
 
-        prod_series = app_data.RESULTS_HELPER.get_plan_production_timeseries(
+        prod_series = data.RESULTS_HELPER.get_plan_production_timeseries(
             scenario_id=scenario_key,
             carrier=carrier_key,
             start_ts=start_ts,
@@ -293,7 +317,7 @@ def register_planning_callbacks(app):
                 value_col="energy_kwh",
                 group_col="group_label",
                 max_points=1200,
-                how="mean",
+                how="sum",
             )
             prod_fig = go.Figure()
             for label in prod_series["group_label"].unique():
@@ -303,7 +327,7 @@ def register_planning_callbacks(app):
                 if line_color:
                     trace_kwargs["line"] = dict(color=line_color)
                 prod_fig.add_trace(go.Scattergl(**trace_kwargs))
-            demand_series = app_data.RESULTS_HELPER.get_plan_demand_timeseries(
+            demand_series = data.RESULTS_HELPER.get_plan_demand_timeseries(
                 scenario_id=scenario_key,
                 carrier=carrier_key,
                 start_ts=start_ts,
@@ -317,7 +341,7 @@ def register_planning_callbacks(app):
                     downsample_series(
                         demand_series.set_index("timestamp")["demand_kwh"].sort_index(),
                         max_points=1200,
-                        how="mean",
+                        how="sum",
                     )
                     .reset_index()
                     .rename(columns={"demand_kwh": "demand_kwh"})
@@ -331,17 +355,16 @@ def register_planning_callbacks(app):
                         line=dict(color="#c0392b", dash="dash", width=2),
                     )
                 )
-            prod_title = "CO2 over time" if carrier_key.lower() == "co2" else "Production over time"
             prod_fig.update_layout(
-                title=prod_title,
+                title="CO2 over time" if carrier_key.lower() == "co2" else None,
                 height=340,
                 margin=dict(l=10, r=10, t=45, b=30),
-                xaxis_title="Time",
+                xaxis_title=f"Time · energy total per {prod_series.attrs['interval']}",
                 yaxis=dict(title="kWh", rangemode="tozero"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
 
-        table = app_data.RESULTS_HELPER.get_plan_detail_table(
+        table = data.RESULTS_HELPER.get_plan_detail_table(
             scenario_id=scenario_key,
             carrier=carrier_key,
             start_ts=start_ts,
@@ -362,18 +385,34 @@ def register_planning_callbacks(app):
             {"name": "Capacity factor", "id": "capacity_factor"},
         ]
 
-        def fmt_table_row(row):
-            row["built_capacity_kw"] = format_number(row["built_capacity_kw"])
-            row["capex_eur"] = format_number(row["capex_eur"])
-            row["fixed_opex_eur"] = format_number(row["fixed_opex_eur"])
-            row["variable_opex_eur"] = format_number(row["variable_opex_eur"])
-            row["co2_kg"] = format_number(row.get("co2_kg", 0.0))
-            row["energy_kwh"] = format_number(row["energy_kwh"])
-            row["capacity_factor"] = f"{row['capacity_factor'] * 100:.1f}%"
-            if "co2_kwh" in row:
-                row["co2_kwh"] = format_number(row["co2_kwh"])
-            return row
+        from dash.dash_table.Format import Format, Scheme, Group
+        for column in columns:
+            if column["id"] != "Name":
+                column.update(type="numeric", format=Format(precision=6, scheme=Scheme.fixed, group=Group.yes))
+        columns[-1]["format"] = Format(precision=2, scheme=Scheme.percentage)
+        data = table.to_dict("records")
 
-        data = [fmt_table_row(row) for row in table.to_dict("records")]
+        # Use the same quiet plot treatment across all planning figures.
+        for fig in (cap_fig, cost_fig, co2_fig, co2_ts_fig, prod_fig):
+            fig.update_layout(
+                paper_bgcolor="white", plot_bgcolor="white",
+                font=dict(family="Geist, Arial, sans-serif", size=12, color="#526477"),
+                hoverlabel=dict(bgcolor="white", font_color="#263648"),
+            )
+            fig.update_xaxes(automargin=True, showgrid=False, zeroline=False, linecolor="#dce5ee")
+            fig.update_yaxes(automargin=True, gridcolor="#e9edf2", zeroline=False)
+
+        # Compare the series at one timestamp in a shared hover panel.
+        for fig, unit in ((prod_fig, "kWh"), (co2_ts_fig, "kg")):
+            if fig.data:
+                fig.update_layout(hovermode="x unified", hoverlabel=dict(namelength=-1))
+                fig.update_traces(hovertemplate=f"%{{y:,.6f}} {unit}<extra>%{{fullData.name}}</extra>")
+                fig.update_xaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikecolor="#9aafb5")
+
+        # Keep category labels readable while retaining vertical bars.
+        for fig in (cap_fig, cost_fig, co2_fig):
+            fig.update_layout(margin=dict(l=10, r=16, t=35, b=35), bargap=0.28)
+            fig.update_xaxes(automargin=True, tickfont=dict(size=11))
+            fig.update_yaxes(showgrid=True, gridcolor="#e9edf2", zeroline=True, zerolinecolor="#dce5ee")
 
         return kpis, cap_fig, cost_fig, co2_fig, co2_ts_fig, prod_fig, columns, data

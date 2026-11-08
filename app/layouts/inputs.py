@@ -8,10 +8,10 @@ from app import app_data
 
 def layout_inputs() -> html.Div:
     return html.Div(
-        style={"display": "flex", "gap": "12px", "alignItems": "flex-start"},
+        className="model-view",
         children=[
             html.Div(
-                style={"flex": "2", "padding": "10px"},
+                className="model-map-panel",
                 children=[
                     html.Div("Model inputs", style={"fontSize": "14px", "fontWeight": "800", "marginBottom": "8px"}),
                     dcc.Store(id="inputs-selected-city", data=None),
@@ -19,7 +19,7 @@ def layout_inputs() -> html.Div:
                         id="inputs-map",
                         center=app_data.MAP_CENTER,
                         zoom=app_data.MAP_ZOOM_DEFAULT,
-                        style={"width": "100%", "height": "600px"},
+                        className="model-map",
                         children=[
                             dl.TileLayer(),
                             dl.LayerGroup(id="inputs-map-layer"),
@@ -29,6 +29,7 @@ def layout_inputs() -> html.Div:
             ),
             html.Div(
                 id="inputs-info-panel",
+                className="model-info-panel",
                 style={
                     "flex": "1",
                     "padding": "10px",
@@ -37,11 +38,10 @@ def layout_inputs() -> html.Div:
                     "backgroundColor": "white",
                     "display": "flex",
                     "flexDirection": "column",
-                    "height": "90vh",
                 },
                 children=[
-                    html.H3("Location Info"),
-                    html.P("Click a city to see details here."),
+                    html.H3("Location details"),
+                    html.P("Select a location on the map to see its details."),
                     html.Div(
                         id="inputs-techs-list",
                         style={"marginTop": "20px", "overflowY": "auto", "flex": "1"},

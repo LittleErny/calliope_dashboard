@@ -1,7 +1,11 @@
 scenarios:
   operate_fixed: [operate_override]
+  high_demand: [high_demand_override]
 
 overrides:
+  high_demand_override:
+    data_tables.time_varying_parameters.table: german_high_demand_timeseries
+
   operate_override:
     config:
       init:
@@ -49,6 +53,8 @@ overrides:
         gas.flow_cap: 1020000
         storage: {flow_cap: 30000, storage_cap: 120000}
     techs:
+      gas_boiler.flow_cap: 4000000
+      solar_thermal.flow_cap: 300000
       storage.cyclic_storage: false
       Berlin_to_Leipzig.flow_cap: 800000
       Berlin_to_Hannover.flow_cap: 1000000

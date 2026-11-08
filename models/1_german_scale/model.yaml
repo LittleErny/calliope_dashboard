@@ -27,6 +27,6 @@ data_definitions:
 
 data_tables:
   time_varying_parameters:
-    data: german_timeseries
+    table: german_timeseries
     rows: timesteps
-    columns: [nodes, techs, parameters]
+    columns: [nodes, techs, inputs]

@@ -20,15 +20,9 @@ The dashboard's core input is one Calliope-compatible solution dataset. It may
 come directly from a normally solved model, from an existing NetCDF export, or
 from another workflow that produces compatible results.
 
-### Optional Pareto integration
-
-`ParetoResult.solution(point_id)` contains the full result dataset but does not
-duplicate model inputs for every point. `CalliopeDashboard.from_pareto(...)`
-therefore also accepts the study's model factory. It creates an unsolved model,
-attaches the selected result, and calls Calliope's own `to_netcdf` exporter.
-
-The server runs in a subprocess. This keeps `app_data` immutable for the life of
-one dashboard and allows notebook code to stop or replace the view explicitly.
+The Python API can combine an existing solution with an unsolved model factory
+and export it for viewing. The server runs in a subprocess, keeping `app_data`
+immutable for its lifetime and allowing the caller to stop or replace the view.
 
 ## NetCDF files
 
@@ -64,3 +58,38 @@ model family.
 
 The helper classes are the version boundary. Code in layouts and callbacks
 should call helper methods instead of reading xarray variables directly.
+
+## Scenario and carrier isolation
+
+`app_data` preloads the root pair and optionally the manifest's other pairs,
+checks common nodes, coordinates, map connections and time axes, and caches
+helpers by `(scenario, carrier)`. Technology and carrier sets can differ. A
+scenario-dependent Carrier selector preserves a still-valid choice or selects
+the first available carrier. Requests with a stale unavailable carrier raise
+`PreventUpdate` until that selector updates, avoiding a misleading interim view.
+Every numerical callback resolves that selection explicitly. Loaded datasets
+are reused; the browser's dropdown does not change a shared active scenario.
+Coordinates and time axes come from exports, not source YAML discovered later.
+
+`helpers/carriers.py` keeps applicable physical flows while separating exclusive
+costs from Shared costs at node/technology level. `helpers/costs.py` provides raw
+whole-model reconciliation; the corresponding Planning layout is commented out.
+
+## Applied controls and display aggregation
+
+The browser edits draft slider/date values. Only Apply updates `applied-time`,
+which feeds the expensive Python callbacks. Calendar-year limits include final
+step duration. Coverage components are allocated per original timestep before
+calendar aggregation; Auto caps bins at 60, while Hourly preserves source steps.
+Full-screen behavior and resizing live in packaged browser assets.
+
+## Errors and solve provenance
+
+The shared Dash error handler logs exceptions, clears affected outputs, and
+shows an Operate missing-export hint where relevant. Switching tabs clears both
+banner style and text. A successful view is not evidence that a dispatch solve
+occurred: `CalliopeDashboard.prepare()` currently copies its selected Planning
+solution to `operate.nc` as well. Genuine rolling-horizon results require a
+separately solved/exported Operate model passed through `--model-dir`.
+
+See [current progress](dashboard-progress-2026-11-07.md) for validation and limits.

@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import xarray as xr
+from helpers.carriers import select_carrier
+from helpers.errors import fail
 
 
 @dataclass(frozen=True)
@@ -47,9 +49,19 @@ class OperateResultsHelper:
         self._line_flow_cache: Dict[Tuple[str, str], pd.Series] = {}
         self._line_load_cache: Dict[Tuple[str, str], pd.Series] = {}
         self._line_capacity_cache: Dict[str, float] = {}
+        self._carrier_helpers = {}
 
         self._line_index = self._build_line_index()
         self._populate_caches()
+
+    def for_carrier(self, carrier):
+        carrier = self.normalize_carrier(carrier)
+        if len(self.get_carriers()) == 1:
+            return self
+        if carrier not in self._carrier_helpers:
+            inputs, results = select_carrier(self.inputs, self.results, carrier)
+            self._carrier_helpers[carrier] = OperateResultsHelper(results, inputs)
+        return self._carrier_helpers[carrier]
 
     def _tech_map(self, variable: str) -> Dict[str, str]:
         if self.inputs is None or variable not in self.inputs:
@@ -64,13 +76,18 @@ class OperateResultsHelper:
 
     def _series(self, variable: str, **selection) -> pd.Series:
         if variable not in self.results:
-            return self._zero_series()
+            if variable == "unmet_demand":
+                # Calliope omits this optional slack variable when disabled.
+                return self._zero_series()
+            fail(f"Operate data unavailable: missing {variable}.")
         try:
             values = np.asarray(self.results[variable].sel(**selection).values, dtype=float)
+            if np.isinf(values).any():
+                fail(f"Infinite operate values in {variable} for {selection}.")
             values = np.nan_to_num(values.reshape(-1), nan=0.0)
             return pd.Series(values, index=self._time_index, dtype=float)
-        except Exception:
-            return self._zero_series()
+        except Exception as exc:
+            fail(f"Cannot read operate {variable} for {selection}.", exc)
 
     def _input_scalar(self, variable: str, **selection) -> float:
         if self.inputs is None or variable not in self.inputs:
@@ -81,19 +98,29 @@ class OperateResultsHelper:
             values = np.asarray(array.sel(**valid_selection).values, dtype=float).reshape(-1)
             values = values[np.isfinite(values)]
             return float(values.max()) if values.size else 0.0
-        except Exception:
-            return 0.0
+        except Exception as exc:
+            fail(f"Cannot read input {variable} for {selection}.", exc)
+
+    def _result_scalar(self, variable: str, **selection) -> float:
+        if variable not in self.results:
+            return self._input_scalar(variable, **selection)
+        try:
+            values = np.asarray(self.results[variable].sel(**selection).values, dtype=float)
+            values = values[np.isfinite(values)]
+            return float(values.max()) if values.size else 0.0
+        except Exception as exc:
+            fail(f"Cannot read result {variable} for {selection}.", exc)
 
     def _is_defined(self, node: str, tech: str, carrier: Optional[str] = None) -> bool:
         if self.inputs is None or "definition_matrix" not in self.inputs:
-            return False
+            fail("Technology definitions are unavailable in operate inputs.")
         try:
             array = self.inputs.definition_matrix.sel(nodes=node, techs=tech)
             if carrier is not None:
                 array = array.sel(carriers=carrier)
             return bool(array.any().item())
-        except Exception:
-            return False
+        except Exception as exc:
+            fail(f"Cannot read technology definition for {node}/{tech}/{carrier}.", exc)
 
     def _is_transmission(self, tech: str) -> bool:
         return self._tech_category_map.get(str(tech)) == "transmission"
@@ -163,7 +190,7 @@ class OperateResultsHelper:
                     self._storage_ts_cache[key] = self._series(
                         "storage", nodes=node, techs=tech
                     )
-                    self._storage_cap_cache[key] = self._input_scalar(
+                    self._storage_cap_cache[key] = self._result_scalar(
                         "storage_cap", nodes=node, techs=tech
                     )
 
@@ -180,20 +207,28 @@ class OperateResultsHelper:
             if "cost_operation_variable" in self.results:
                 cost = self.results.cost_operation_variable.sel(nodes=node)
                 if "costs" in cost.dims:
-                    key = "monetary" if "monetary" in cost.costs else cost.costs.values[0]
-                    cost = cost.sel(costs=key)
+                    if "monetary" not in cost.costs:
+                        self._var_cost_ts_cache[node] = pd.Series(np.nan, index=self._time_index)
+                        continue
+                    cost = cost.sel(costs="monetary")
                 values = cost.sum("techs", skipna=True).values
                 self._var_cost_ts_cache[node] = pd.Series(
                     np.nan_to_num(values, nan=0.0), index=self._time_index, dtype=float
                 )
 
         for line_id, line in self._line_index.items():
-            capacity = max(
-                self._input_scalar("flow_cap", nodes=line.src, techs=line.tech),
-                self._input_scalar("flow_cap", nodes=line.dst, techs=line.tech),
-                self._input_scalar("flow_cap_max", nodes=line.src, techs=line.tech),
-                self._input_scalar("flow_cap_max", nodes=line.dst, techs=line.tech),
-            )
+            if "link_flow_cap" in self.results:
+                capacity = self._result_scalar("link_flow_cap", techs=line.tech)
+            elif "flow_cap" in self.results:
+                capacity = max(self._result_scalar("flow_cap", nodes=line.src, techs=line.tech),
+                               self._result_scalar("flow_cap", nodes=line.dst, techs=line.tech))
+            else:
+                capacity = max(
+                    self._input_scalar("flow_cap", nodes=line.src, techs=line.tech),
+                    self._input_scalar("flow_cap", nodes=line.dst, techs=line.tech),
+                    self._input_scalar("flow_cap_max", nodes=line.src, techs=line.tech),
+                    self._input_scalar("flow_cap_max", nodes=line.dst, techs=line.tech),
+                )
             self._line_capacity_cache[line_id] = capacity
             for carrier in self._carriers:
                 flow = self._series(
@@ -201,7 +236,9 @@ class OperateResultsHelper:
                 ).abs()
                 self._line_flow_cache[(line_id, carrier)] = flow
                 if capacity > 0:
-                    self._line_load_cache[(line_id, carrier)] = (flow / capacity).clip(0.0, 1.0)
+                    sent = self._series("flow_in", nodes=line.src, techs=line.tech, carriers=carrier).abs()
+                    duration = self.inputs.timestep_resolution.to_series().reindex(self._time_index)
+                    self._line_load_cache[(line_id, carrier)] = sent / (capacity * duration)
                 else:
                     self._line_load_cache[(line_id, carrier)] = self._zero_series()
 
@@ -256,7 +293,7 @@ class OperateResultsHelper:
 
     def get_location_energy_caps(self, location: str) -> Dict[str, float]:
         return {
-            tech: self._input_scalar("flow_cap", nodes=location, techs=tech)
+            tech: self._result_scalar("flow_cap", nodes=location, techs=tech)
             for tech in self.get_location_techs(location, include_transmission=True)
         }
 
@@ -397,6 +434,11 @@ class OperateResultsHelper:
     def get_location_operate_kpis_window(
         self, location: str, carrier: str, start_idx: int, end_idx: int
     ) -> Dict[str, float]:
+        if "cost_operation_variable" not in self.results:
+            fail("Variable operating costs are unavailable: missing cost_operation_variable.")
+        scoped = self.for_carrier(carrier)
+        if scoped is not self:
+            return scoped.get_location_operate_kpis_window(location, carrier, start_idx, end_idx)
         carrier_key = self.normalize_carrier(carrier)
         demand = self.get_location_effective_demand_window(
             location, carrier_key, start_idx, end_idx
@@ -410,6 +452,8 @@ class OperateResultsHelper:
         variable_cost = self._slice_series(
             self._var_cost_ts_cache.get(location, self._zero_series()), start_idx, end_idx
         )
+        if variable_cost.isna().any():
+            fail("Monetary operating costs are unavailable; another cost class cannot be displayed as EUR.")
         return {
             "total_demand": float(demand.sum()),
             "total_unmet": float(unmet.sum()),
@@ -450,6 +494,18 @@ class OperateResultsHelper:
         self, line_id: str, carrier: str, start_idx: int, end_idx: int
     ) -> pd.Series:
         return self._slice_series(self.get_line_flow_timeseries(line_id, carrier), start_idx, end_idx)
+
+    def timestep_hours(self):
+        if self.inputs is None or "timestep_resolution" not in self.inputs:
+            fail("Timestep duration is unavailable; power and energy cannot be compared.")
+        duration = self.inputs.timestep_resolution.to_series().reindex(self._time_index)
+        if duration.isna().any() or (duration <= 0).any():
+            fail("Timestep durations must be present and positive.")
+        return duration
+
+    def get_line_power_window(self, line_id, carrier, start_idx, end_idx):
+        energy = self.get_line_flow_window(line_id, carrier, start_idx, end_idx)
+        return energy / self.timestep_hours().reindex(energy.index)
 
     def get_line_flow_at_timestep(self, line_id: str, carrier: str, idx: int) -> float:
         series = self.get_line_flow_timeseries(line_id, carrier)
