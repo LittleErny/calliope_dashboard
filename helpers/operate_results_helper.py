@@ -10,6 +10,7 @@ import pandas as pd
 import xarray as xr
 from helpers.carriers import select_carrier
 from helpers.errors import fail
+from helpers.technology_colors import technology_color
 
 
 @dataclass(frozen=True)
@@ -272,7 +273,11 @@ class OperateResultsHelper:
         return list(self._locations)
 
     def get_technology_color_map(self) -> Dict[str, str]:
-        return dict(self._tech_color_map)
+        names = self._tech_map("name")
+        return {
+            str(tech): technology_color(str(tech), names.get(str(tech), ""), self._tech_color_map.get(str(tech)))
+            for tech in self.results.techs.values
+        }
 
     def get_location_tech_carrier(self, location: str, tech: str) -> str:
         for carrier in self._carriers:

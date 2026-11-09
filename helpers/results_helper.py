@@ -7,6 +7,7 @@ import pandas as pd
 import xarray as xr
 from helpers.carriers import select_carrier
 from helpers.errors import fail
+from helpers.technology_colors import technology_color
 
 ALL_LOCATIONS = "__all_locations__"
 
@@ -290,16 +291,18 @@ class ResultsHelper:
         return sorted(set(result))
 
     def get_technology_color_map(self, include_fallback: bool = True) -> Dict[str, str]:
-        color_map = {
-            self._humanize_tech(tech): color
-            for tech, color in self._tech_color_map.items()
-            if color and color.lower() not in {"nan", "none"}
+        if not include_fallback:
+            return {
+                self._humanize_tech(tech): color
+                for tech, color in self._tech_color_map.items()
+                if color and color.strip().casefold() not in {"nan", "none", ""}
+            }
+        return {
+            self._humanize_tech(str(tech)): technology_color(
+                str(tech), self._humanize_tech(str(tech)), self._tech_color_map.get(str(tech))
+            )
+            for tech in self.results.techs.values
         }
-        if include_fallback:
-            palette = ["#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2"]
-            for index, tech in enumerate(self.get_technologies(True, True)):
-                color_map.setdefault(tech, palette[index % len(palette)])
-        return color_map
 
     def get_carriers(self) -> List[str]:
         return [str(value) for value in self.results.carriers.values]
