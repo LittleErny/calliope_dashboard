@@ -37,6 +37,8 @@ def test_vertical_breakdowns_preserve_category_values(scenario, carrier, view, l
                   "Fixed OPEX": "fixed_opex_eur", "Variable OPEX": "variable_opex_eur",
                   "Other / residual": "other_costs_eur"}
     for trace in costs.data:
+        if trace.showlegend:
+            continue  # Neutral legend proxies carry no model values.
         assert trace.orientation == "v"
         actual = dict(zip(trace.x, trace.y))
         for _, row in expected_cost.iterrows():
@@ -53,3 +55,31 @@ def test_vertical_breakdowns_preserve_category_values(scenario, carrier, view, l
         actual = dict(zip(trace.x, trace.y))
         for _, row in expected_co2.iterrows():
             assert actual[row[group]] == pytest.approx(row["co2_kg"])
+
+
+@pytest.mark.parametrize("view,location,tech", [
+    ("location", ALL_LOCATIONS, None),
+    ("location", "Berlin", None),
+    ("technology", None, "Wind Energy"),
+])
+def test_cost_hues_match_technologies_and_neutral_legend_explains_shades(view, location, tech):
+    from app.callbacks.planning import _apply_alpha
+
+    callback = next(v["callback"].__wrapped__ for v in app.callback_map.values()
+                    if "callback" in v and v["callback"].__wrapped__.__name__ == "update_plan_dashboard")
+    costs = callback("default", "electricity", [0, 47], view, location, tech, "absolute")[2]
+    colors = app_data.get_scenario("default", "electricity").RESULTS_HELPER.get_technology_color_map()
+    bars = [trace for trace in costs.data if not trace.showlegend]
+    proxies = [trace for trace in costs.data if trace.showlegend]
+    assert len(bars) == len(proxies) >= 3
+    for bar, proxy, alpha in zip(bars, proxies, [0.95, 0.65, 0.4, 0.25]):
+        assert list(bar.marker.color) == [
+            _apply_alpha(colors[category if view == "location" else tech], alpha)
+            for category in bar.x
+        ]
+        assert proxy.marker.color == _apply_alpha("#526477", alpha)
+        assert proxy.legendgroup == bar.legendgroup
+        assert proxy.name == bar.name
+        assert list(proxy.y) == [None]
+    assert costs.layout.legend.groupclick == "togglegroup"
+    assert costs.layout.legend.title.text == "Hue = technology · shade = cost type"

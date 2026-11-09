@@ -210,13 +210,36 @@ def register_planning_callbacks(app):
                 y_title = "€"
 
             cost_fig = go.Figure()
-            # Cost legend describes cost components, so each component must
-            # keep the same color across every technology or location.
-            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["annualised_investment_eur"], orientation="v", name="Annualised investment", marker_color="#3769aa"))
-            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["fixed_opex_eur"], orientation="v", name="Fixed OPEX", marker_color="#78a0cf"))
-            cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["variable_opex_eur"], orientation="v", name="Variable OPEX", marker_color="#b7cfe8"))
+            # Hue follows the model technology; opacity encodes the cost type.
+            # Neutral proxy swatches explain opacity without suggesting that a
+            # cost component has one technology's hue. Grouped legend clicks
+            # still toggle the matching component across every bar.
+            base_colors = [
+                (OTHER_TECH_COLOR if label == "Other" else tech_color_map.get(label, OTHER_TECH_COLOR))
+                if group_key == "technology"
+                else tech_color_map.get(selection["selection_value"], OTHER_TECH_COLOR)
+                for label in cost_group[group_key]
+            ]
+            components = [
+                ("annualised_investment_eur", "Annualised investment", 0.95),
+                ("fixed_opex_eur", "Fixed OPEX", 0.65),
+                ("variable_opex_eur", "Variable OPEX", 0.4),
+            ]
             if cost_group.other_costs_eur.abs().max() > 1e-6:
-                cost_fig.add_trace(go.Bar(x=cost_group[group_key], y=cost_group["other_costs_eur"], orientation="v", name="Other / residual", marker_color="#8a97a5"))
+                components.append(("other_costs_eur", "Other / residual", 0.25))
+            for column, label, alpha in components:
+                cost_fig.add_trace(go.Bar(
+                    x=cost_group[group_key], y=cost_group[column],
+                    orientation="v", name=label, legendgroup=column,
+                    showlegend=False,
+                    marker_color=[_apply_alpha(color, alpha) for color in base_colors],
+                ))
+            for column, label, alpha in components:
+                cost_fig.add_trace(go.Bar(
+                    x=[cost_group[group_key].iloc[0]], y=[None], orientation="v", name=label,
+                    legendgroup=column, showlegend=True, hoverinfo="skip",
+                    marker_color=_apply_alpha("#526477", alpha),
+                ))
             cost_fig.update_traces(hovertemplate=f"%{{x}}<br>%{{y:,.9f}} {y_title}<extra>%{{fullData.name}}</extra>")
             cost_fig.update_layout(
                 barmode="relative",
@@ -227,7 +250,11 @@ def register_planning_callbacks(app):
                 margin=dict(l=10, r=10, t=45, b=40),
                 xaxis_title=group_key.title(),
                 yaxis_title=y_title,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                legend=dict(
+                    orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    title=dict(text="Hue = technology · shade = cost type", side="top"),
+                    groupclick="togglegroup",
+                ),
             )
 
         co2_group = data.RESULTS_HELPER.get_plan_co2_group(
@@ -414,5 +441,8 @@ def register_planning_callbacks(app):
             fig.update_layout(margin=dict(l=10, r=16, t=35, b=35), bargap=0.28)
             fig.update_xaxes(automargin=True, tickfont=dict(size=11))
             fig.update_yaxes(showgrid=True, gridcolor="#e9edf2", zeroline=True, zerolinecolor="#dce5ee")
+
+        if not cost_group.empty:
+            cost_fig.update_layout(height=360, margin=dict(t=100))
 
         return kpis, cap_fig, cost_fig, co2_fig, co2_ts_fig, prod_fig, columns, data

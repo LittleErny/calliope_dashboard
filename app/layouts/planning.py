@@ -92,7 +92,7 @@ def layout_results_planning() -> html.Div:
                                 ],
                                 className="planning-chart-heading",
                             ),
-                            dcc.Graph(responsive=True, id="plan-cost-breakdown", config=CHART_CONFIG, style={"height": "320px"}),
+                            dcc.Graph(responsive=True, id="plan-cost-breakdown", config=CHART_CONFIG, style={"height": "360px"}),
                         ],
                         className="planning-chart-card",
                     ),

@@ -88,6 +88,11 @@ Planning mode supports three perspectives:
 - **By location** shows the same metrics for one model node.
 - **By technology** compares one technology across model nodes.
 
+Cost breakdown bars use each technology's model color. Darker to lighter shades
+show annualised investment, fixed OPEX, variable OPEX and, when present, residual
+costs. Neutral legend swatches explain the shades; click a component to hide or
+show it across all bars.
+
 Production and demand time series respect the selected carrier and time window.
 Each KPI has a question-mark explanation on hover or keyboard focus. A missing
 `co2` class is shown as unavailable rather than measured zero.
